@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 
 import { BookGrid } from "@/components/book-grid";
 import { Button } from "@/components/ui/button";
@@ -138,18 +139,39 @@ export default async function LibraryPage() {
   return (
     <div className="space-y-8">
       <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.2em] text-[rgb(var(--muted-foreground))]">
-          My Library
-        </p>
-        <h1 className="text-3xl font-semibold">
-          {userRole === "editor" ? "My Books" : "My Library"}
-        </h1>
-        <p className="max-w-2xl text-sm text-[rgb(var(--muted-foreground))]">
-          {userRole === "editor" 
-            ? "Manage your book summaries, edit titles, upload covers, and control visibility."
-            : "Your created summaries and books you've saved from the community."
-          }
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-3 flex-1">
+            <p className="text-xs uppercase tracking-[0.2em] text-[rgb(var(--muted-foreground))]">
+              My Library
+            </p>
+            <h1 className="text-3xl font-semibold">
+              {userRole === "editor" ? "My Books" : "My Library"}
+            </h1>
+            <p className="max-w-2xl text-sm text-[rgb(var(--muted-foreground))]">
+              {userRole === "editor" 
+                ? "Manage your book summaries, edit titles, upload covers, and control visibility."
+                : "Your created summaries and books you've saved from the community."
+              }
+            </p>
+          </div>
+          <div className="flex gap-3 pt-8">
+            {userRole === "editor" ? (
+              <Button asChild>
+                <Link href="/create-book" className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create New Book
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline">
+                <Link href="/" className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Summary
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
       </header>
 
       {books.length ? (
