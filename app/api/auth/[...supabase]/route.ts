@@ -10,6 +10,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// TypeScript type assertion - we know these are strings after the check above
+const SUPABASE_URL: string = supabaseUrl;
+const SUPABASE_ANON_KEY: string = supabaseAnonKey;
+
 async function handleAuth(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
@@ -23,8 +27,8 @@ async function handleAuth(request: NextRequest) {
   }
 
   const supabase = createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
       cookies: {
         get(name: string) {
