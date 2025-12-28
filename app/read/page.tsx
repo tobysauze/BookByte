@@ -37,11 +37,12 @@ export default async function ReadPage() {
     throw new Error("Failed to load your read books.");
   }
 
-  const books = (readBooks ?? []).map(item => ({
-    ...item.books,
-    id: item.books.id,
-    read_at: item.read_at,
-  })) as (SupabaseSummary & { read_at: string })[];
+  const books = (readBooks ?? [])
+    .filter(item => item.books !== null)
+    .map(item => ({
+      ...(item.books as unknown as SupabaseSummary),
+      read_at: item.read_at,
+    })) as (SupabaseSummary & { read_at: string })[];
 
   // Check which books are also favorited
   let favoriteBooks: Set<string> = new Set();

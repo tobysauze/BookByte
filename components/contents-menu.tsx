@@ -4,9 +4,12 @@ import { BookOpen, Lightbulb, List, Target, Quote, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 
-type SummarySectionKey = keyof SummaryPayload;
+// Only use structured summary keys (not raw_text variant)
+type SummarySectionKey = keyof z.infer<typeof summarySchema>;
 
 type ContentsMenuProps = {
   summary: SummaryPayload;
@@ -20,19 +23,28 @@ type ContentsMenuProps = {
 
 const sectionIcons: Record<SummarySectionKey, LucideIcon> = {
   quick_summary: BookOpen,
+  short_summary: BookOpen,
   key_ideas: Lightbulb,
   chapters: List,
   actionable_insights: Target,
   quotes: Quote,
+  ai_provider: BookOpen,
 };
 
 const sectionLabels: Record<SummarySectionKey, string> = {
   quick_summary: "Quick Summary",
+  short_summary: "Short Summary",
   key_ideas: "Key Ideas",
   chapters: "Chapters",
   actionable_insights: "Insights",
   quotes: "Quotes",
+  ai_provider: "AI Provider",
 };
+
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
 
 export function ContentsMenu({
   summary,
@@ -44,6 +56,13 @@ export function ContentsMenu({
   isOpen,
 }: ContentsMenuProps) {
   if (!isOpen) return null;
+  
+  // Ensure summary is structured
+  if (!isStructuredSummary(summary)) {
+    return null; // Don't show contents for raw text summaries
+  }
+  
+  const structuredSummary = summary;
 
   const handleItemClick = (section: SummarySectionKey, index: number) => {
     onSectionChange(section);
@@ -94,13 +113,13 @@ export function ContentsMenu({
             </div>
 
             {/* Key Ideas */}
-            {summary.key_ideas.length > 0 && (
+            {structuredSummary.key_ideas.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
                   Key Ideas
                 </div>
                 <div className="space-y-1">
-                  {summary.key_ideas.map((idea, index) => (
+                  {structuredSummary.key_ideas.map((idea, index) => (
                     <Button
                       key={index}
                       variant={currentSection === "key_ideas" && currentItemIndex === index ? "default" : "ghost"}
@@ -124,13 +143,13 @@ export function ContentsMenu({
             )}
 
             {/* Chapters */}
-            {summary.chapters.length > 0 && (
+            {structuredSummary.chapters.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
                   Chapters
                 </div>
                 <div className="space-y-1">
-                  {summary.chapters.map((chapter, index) => (
+                  {structuredSummary.chapters.map((chapter, index) => (
                     <Button
                       key={index}
                       variant={currentSection === "chapters" && currentItemIndex === index ? "default" : "ghost"}
@@ -184,13 +203,13 @@ export function ContentsMenu({
             )}
 
             {/* Quotes */}
-            {summary.quotes.length > 0 && (
+            {structuredSummary.quotes.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
                   Quotes
                 </div>
                 <div className="space-y-1">
-                  {summary.quotes.map((quote, index) => (
+                  {structuredSummary.quotes.map((quote, index) => (
                     <Button
                       key={index}
                       variant={currentSection === "quotes" && currentItemIndex === index ? "default" : "ghost"}

@@ -6,9 +6,12 @@ import { AudioPlayer } from "@/components/audio-player";
 import { Badge } from "@/components/ui/badge";
 import { PaginatedChapters } from "@/components/paginated-chapters";
 import { UniversalPagination } from "@/components/universal-pagination";
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 
-type SummarySectionKey = keyof SummaryPayload;
+// Only use structured summary keys (not raw_text variant)
+type SummarySectionKey = keyof z.infer<typeof summarySchema>;
 
 type SummaryContentProps = {
   summary: SummaryPayload;
@@ -25,10 +28,12 @@ type SummaryContentProps = {
 
 const sectionLabels: Record<SummarySectionKey, string> = {
   quick_summary: "Quick Summary",
+  short_summary: "Short Summary",
   key_ideas: "Key Ideas",
   chapters: "Chapters",
   actionable_insights: "Insights",
   quotes: "Quotes",
+  ai_provider: "AI Provider",
 };
 
 const EMPTY_AUDIO_MAP = {};

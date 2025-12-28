@@ -4,9 +4,12 @@ import { BookOpen, Lightbulb, List, Target, Quote, Headphones, Menu } from "luci
 import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 
-type SummarySectionKey = keyof SummaryPayload;
+// Only use structured summary keys (not raw_text variant)
+type SummarySectionKey = keyof z.infer<typeof summarySchema>;
 
 type VerticalSummaryNavProps = {
   summary: SummaryPayload;
@@ -19,6 +22,7 @@ type VerticalSummaryNavProps = {
 
 const sectionOrder: SummarySectionKey[] = [
   "quick_summary",
+  "short_summary",
   "key_ideas",
   "chapters",
   "actionable_insights",
@@ -27,18 +31,22 @@ const sectionOrder: SummarySectionKey[] = [
 
 const sectionLabels: Record<SummarySectionKey, string> = {
   quick_summary: "Quick Summary",
+  short_summary: "Short Summary",
   key_ideas: "Key Ideas",
   chapters: "Chapters",
   actionable_insights: "Insights",
   quotes: "Quotes",
+  ai_provider: "AI Provider",
 };
 
 const sectionIcons: Record<SummarySectionKey, LucideIcon> = {
   quick_summary: BookOpen,
+  short_summary: BookOpen,
   key_ideas: Lightbulb,
   chapters: List,
   actionable_insights: Target,
   quotes: Quote,
+  ai_provider: BookOpen,
 };
 
 export function VerticalSummaryNav({

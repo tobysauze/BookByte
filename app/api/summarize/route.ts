@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { z } from "zod";
 
 import { chunkText, mergeChunks } from "@/lib/chunk-merge";
 import { extractTextFromFile } from "@/lib/pdf";
@@ -8,6 +9,11 @@ import { generateStructuredSummary } from "@/lib/openrouter";
 import { analyzeBookWithMultiPass } from "@/lib/multi-pass-analysis";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { summarySchema, type SummaryPayload } from "@/lib/schemas";
+
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return 'quick_summary' in summary && typeof summary.quick_summary === 'string';
+}
 
 export const runtime = "nodejs";
 
@@ -96,12 +102,19 @@ function combineChapterSummaries(
   bookTitle: string,
   bookAuthor?: string
 ): SummaryPayload {
+  // All chapter summaries should be structured (they come from generateStructuredSummary)
+  const structuredSummaries: z.infer<typeof summarySchema>[] = chapterSummaries.filter(isStructuredSummary);
+  
+  if (structuredSummaries.length === 0) {
+    throw new Error("No valid structured summaries to combine");
+  }
+  
   // Combine all chapters
-  const allChapters = chapterSummaries.flatMap((cs) => cs.chapters);
+  const allChapters = structuredSummaries.flatMap((cs: z.infer<typeof summarySchema>) => cs.chapters);
   
   // Combine all key ideas (deduplicate by title)
   const keyIdeasMap = new Map<string, { title: string; text: string }>();
-  chapterSummaries.forEach((cs) => {
+  structuredSummaries.forEach((cs) => {
     cs.key_ideas.forEach((ki) => {
       if (!keyIdeasMap.has(ki.title)) {
         keyIdeasMap.set(ki.title, ki);
@@ -115,18 +128,18 @@ function combineChapterSummaries(
   
   // Combine all actionable insights (deduplicate)
   const actionableInsightsSet = new Set<string>();
-  chapterSummaries.forEach((cs) => {
+  structuredSummaries.forEach((cs) => {
     cs.actionable_insights.forEach((ai) => actionableInsightsSet.add(ai));
   });
   
   // Combine all quotes (deduplicate)
   const quotesSet = new Set<string>();
-  chapterSummaries.forEach((cs) => {
+  structuredSummaries.forEach((cs) => {
     cs.quotes.forEach((q) => quotesSet.add(q));
   });
   
   // Create overall quick summary from all chapter quick summaries
-  const combinedQuickSummary = chapterSummaries
+  const combinedQuickSummary = structuredSummaries
     .map((cs, idx) => {
       const chapterTitle = cs.chapters[0]?.title || `Chapter ${idx + 1}`;
       return `## ${chapterTitle}\n\n${cs.quick_summary}`;
@@ -134,15 +147,15 @@ function combineChapterSummaries(
     .join("\n\n");
   
   // Create overall short summary from first chapter or combine
-  let shortSummary = chapterSummaries.length > 0 
-    ? chapterSummaries[0].short_summary 
+  let shortSummary = structuredSummaries.length > 0 
+    ? structuredSummaries[0].short_summary 
     : `${bookTitle}${bookAuthor ? ` by ${bookAuthor}` : ""} - A comprehensive exploration of key concepts and insights.`;
 
   // If we have multiple chapters, try to create a better overall summary
-  if (chapterSummaries.length > 1) {
-    const firstShort = chapterSummaries[0].short_summary;
+  if (structuredSummaries.length > 1) {
+    const firstShort = structuredSummaries[0].short_summary;
     if (firstShort.length < 150) {
-      const note = ` (${chapterSummaries.length} chapters)`;
+      const note = ` (${structuredSummaries.length} chapters)`;
       const enhanced = firstShort + note;
       if (enhanced.length <= 200) {
         shortSummary = enhanced;
@@ -156,7 +169,7 @@ function combineChapterSummaries(
     : shortSummary;
 
   return {
-    ai_provider: chapterSummaries[0]?.ai_provider || "Unknown",
+    ai_provider: structuredSummaries[0]?.ai_provider || "Unknown",
     short_summary: finalShortSummary,
     quick_summary: combinedQuickSummary,
     key_ideas: Array.from(keyIdeasMap.values()),

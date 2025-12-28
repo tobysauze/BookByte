@@ -2,11 +2,18 @@
 
 import { useState } from "react";
 
+import { z } from "zod";
 import { EditableSummarySection, EditableTextSection, EditableListSection } from "@/components/editable-summary-section";
 import { UniversalPagination } from "@/components/universal-pagination";
 import { useHighlights } from "@/lib/use-highlights";
 import type { SupabaseSummary } from "@/lib/supabase";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
+
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
 
 type EditableSummaryContentProps = {
   book: SupabaseSummary;
@@ -29,17 +36,20 @@ export function EditableSummaryContent({
   onNext,
   canEdit = false,
 }: EditableSummaryContentProps) {
+  // Ensure summary is structured
+  if (!isStructuredSummary(book.summary)) {
+    return <div>Summary must be in structured format</div>;
+  }
+  
   const [isUpdating, setIsUpdating] = useState(false);
   const { highlights, refreshHighlights } = useHighlights(book.id);
 
-  const summary = (book.summary || {
-    quick_summary: "",
-    short_summary: "",
-    key_ideas: [],
-    chapters: [],
-    actionable_insights: [],
-    quotes: [],
-  }) as SummaryPayload;
+  // Ensure summary is structured
+  if (!isStructuredSummary(book.summary)) {
+    return <div>Summary must be in structured format</div>;
+  }
+  
+  const summary = book.summary;
 
   const handleSaveSection = async (section: string, data: any) => {
     setIsUpdating(true);

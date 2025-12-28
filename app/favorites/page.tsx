@@ -37,11 +37,12 @@ export default async function FavoritesPage() {
     throw new Error("Failed to load your favorite books.");
   }
 
-  const books = (favoriteBooks ?? []).map(item => ({
-    ...item.books,
-    id: item.books.id,
-    favorited_at: item.favorited_at,
-  })) as (SupabaseSummary & { favorited_at: string })[];
+  const books = (favoriteBooks ?? [])
+    .filter(item => item.books !== null)
+    .map(item => ({
+      ...(item.books as unknown as SupabaseSummary),
+      favorited_at: item.favorited_at,
+    })) as (SupabaseSummary & { favorited_at: string })[];
 
   // Check which books are also marked as read
   let readBooks: Set<string> = new Set();

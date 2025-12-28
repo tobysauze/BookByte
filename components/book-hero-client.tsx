@@ -28,14 +28,27 @@ type BookHeroClientProps = {
 function countSummaryWords(summary: SummaryPayload): number {
   let wordCount = 0;
   
+  // Check if summary is structured format
+  const isStructured = summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+  
+  if (!isStructured) {
+    // For raw text summaries, count words in raw_text
+    if ('raw_text' in summary && typeof (summary as { raw_text: string }).raw_text === 'string') {
+      return (summary as { raw_text: string }).raw_text.split(/\s+/).filter(word => word.length > 0).length;
+    }
+    return 0;
+  }
+  
+  const structured = summary as { quick_summary?: string; key_ideas?: Array<{ title?: string; text?: string }>; chapters?: Array<{ title?: string; summary?: string }>; actionable_insights?: string[]; quotes?: string[] };
+  
   // Count words in quick_summary
-  if (summary.quick_summary) {
-    wordCount += summary.quick_summary.split(/\s+/).filter(word => word.length > 0).length;
+  if (structured.quick_summary) {
+    wordCount += structured.quick_summary.split(/\s+/).filter(word => word.length > 0).length;
   }
   
   // Count words in key_ideas (title + text)
-  if (summary.key_ideas) {
-    summary.key_ideas.forEach(idea => {
+  if (structured.key_ideas) {
+    structured.key_ideas.forEach(idea => {
       if (idea.title) {
         wordCount += idea.title.split(/\s+/).filter(word => word.length > 0).length;
       }
@@ -46,8 +59,8 @@ function countSummaryWords(summary: SummaryPayload): number {
   }
   
   // Count words in chapters (title + summary)
-  if (summary.chapters) {
-    summary.chapters.forEach(chapter => {
+  if (structured.chapters) {
+    structured.chapters.forEach(chapter => {
       if (chapter.title) {
         wordCount += chapter.title.split(/\s+/).filter(word => word.length > 0).length;
       }
@@ -58,8 +71,8 @@ function countSummaryWords(summary: SummaryPayload): number {
   }
   
   // Count words in actionable_insights
-  if (summary.actionable_insights) {
-    summary.actionable_insights.forEach(insight => {
+  if (structured.actionable_insights) {
+    structured.actionable_insights.forEach(insight => {
       if (insight) {
         wordCount += insight.split(/\s+/).filter(word => word.length > 0).length;
       }
@@ -67,8 +80,8 @@ function countSummaryWords(summary: SummaryPayload): number {
   }
   
   // Count words in quotes
-  if (summary.quotes) {
-    summary.quotes.forEach(quote => {
+  if (structured.quotes) {
+    structured.quotes.forEach(quote => {
       if (quote) {
         wordCount += quote.split(/\s+/).filter(word => word.length > 0).length;
       }

@@ -62,6 +62,10 @@ export type SupabaseSummary = {
   progress_percent?: number | null;
   is_public: boolean;
   created_at: string;
+  local_file_path?: string | null;
+  analysis_results?: unknown | null;
+  last_analyzed_at?: string | null;
+  is_editor_created?: boolean;
 };
 
 

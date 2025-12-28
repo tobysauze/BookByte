@@ -10,15 +10,23 @@ import { ContinuousScrollView } from "@/components/continuous-scroll-view";
 import { ContentsMenu } from "@/components/contents-menu";
 import { TextSettings } from "@/components/text-settings";
 import { Scroll, BookOpen } from "lucide-react";
+import { z } from "zod";
 import type { SupabaseSummary } from "@/lib/supabase";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 
 type BookSummaryClientProps = {
   book: SupabaseSummary;
   canEdit?: boolean;
 };
 
-type SummarySectionKey = keyof SummaryPayload;
+// Only use structured summary keys (not raw_text variant)
+type SummarySectionKey = keyof z.infer<typeof summarySchema>;
+
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
 
 export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientProps) {
   const searchParams = useSearchParams();
@@ -28,6 +36,13 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
   const [audioMap, setAudioMap] = useState<Record<string, string>>(
     (book.audio_urls ?? {}) as Record<string, string>,
   );
+  
+  // Ensure summary is structured (should always be for book display)
+  if (!isStructuredSummary(book.summary)) {
+    throw new Error("Book summary must be in structured format");
+  }
+  
+  const structuredSummary = book.summary as z.infer<typeof summarySchema>;
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isContinuousScroll, setIsContinuousScroll] = useState(() => {
@@ -175,21 +190,21 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
     
     if (activeTab === "quick_summary") {
       // Go to last page of previous section
-      if (book.summary.quotes.length > 0) {
+      if (structuredSummary.quotes.length > 0) {
         setActiveTab("quotes");
-        const lastPage = Math.floor((book.summary.quotes.length - 1) / ITEMS_PER_PAGE);
+        const lastPage = Math.floor((structuredSummary.quotes.length - 1) / ITEMS_PER_PAGE);
         setCurrentItemIndex(lastPage * ITEMS_PER_PAGE);
-      } else if (book.summary.actionable_insights.length > 0) {
+      } else if (structuredSummary.actionable_insights.length > 0) {
         setActiveTab("actionable_insights");
-        const lastPage = Math.floor((book.summary.actionable_insights.length - 1) / ITEMS_PER_PAGE);
+        const lastPage = Math.floor((structuredSummary.actionable_insights.length - 1) / ITEMS_PER_PAGE);
         setCurrentItemIndex(lastPage * ITEMS_PER_PAGE);
-      } else if (book.summary.chapters.length > 0) {
+      } else if (structuredSummary.chapters.length > 0) {
         setActiveTab("chapters");
-        const lastPage = Math.floor((book.summary.chapters.length - 1) / ITEMS_PER_PAGE);
+        const lastPage = Math.floor((structuredSummary.chapters.length - 1) / ITEMS_PER_PAGE);
         setCurrentItemIndex(lastPage * ITEMS_PER_PAGE);
-      } else if (book.summary.key_ideas.length > 0) {
+      } else if (structuredSummary.key_ideas.length > 0) {
         setActiveTab("key_ideas");
-        const lastPage = Math.floor((book.summary.key_ideas.length - 1) / ITEMS_PER_PAGE);
+        const lastPage = Math.floor((structuredSummary.key_ideas.length - 1) / ITEMS_PER_PAGE);
         setCurrentItemIndex(lastPage * ITEMS_PER_PAGE);
       }
     } else {
@@ -256,15 +271,19 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
   const getSectionItems = (section: SummarySectionKey) => {
     switch (section) {
       case "quick_summary":
-        return [book.summary.quick_summary];
+        return [structuredSummary.quick_summary];
       case "key_ideas":
-        return book.summary.key_ideas;
+        return structuredSummary.key_ideas;
       case "chapters":
-        return book.summary.chapters;
+        return structuredSummary.chapters;
       case "actionable_insights":
-        return book.summary.actionable_insights;
+        return structuredSummary.actionable_insights;
       case "quotes":
-        return book.summary.quotes;
+        return structuredSummary.quotes;
+      case "short_summary":
+        return [structuredSummary.short_summary];
+      case "ai_provider":
+        return [structuredSummary.ai_provider || "Unknown"];
       default:
         return [];
     }
@@ -278,15 +297,10 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
     }
   };
 
-  // Check if this is raw text format (new format)
-  const isRawText = book.summary && typeof book.summary === 'object' && 'raw_text' in book.summary && typeof (book.summary as Record<string, unknown>).raw_text === 'string';
-  const rawText = isRawText ? (book.summary as { raw_text: string }).raw_text : null;
-
   return (
     <div className="space-y-6">
-      {/* Action Buttons - Only show if not raw text format */}
-      {!isRawText && (
-        <div className="flex items-center justify-between flex-wrap gap-4">
+      {/* Action Buttons */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
             <TextSettings />
             {/* View Mode Toggle */}
@@ -323,7 +337,6 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
             </Button>
           ) : null}
         </div>
-      )}
 
       {/* Error Message */}
       {error ? (
@@ -332,18 +345,8 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
         </div>
       ) : null}
 
-      {/* Raw Text Display */}
-      {isRawText && rawText ? (
-        <div className="max-w-4xl mx-auto">
-          <div className="prose prose-lg max-w-none dark:prose-invert">
-            <div className="whitespace-pre-wrap font-sans text-base leading-relaxed text-[rgb(var(--foreground))] bg-[rgb(var(--muted))]/30 p-6 rounded-lg border border-[rgb(var(--border))]">
-              {rawText}
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Summary Section with Sidebar - Only for structured format */
-        <>
+      {/* Summary Section with Sidebar */}
+      <>
           <div className="flex">
             {/* Vertical Navigation Sidebar */}
             <VerticalSummaryNav
@@ -365,9 +368,9 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
               ) : (
                 <EditableSummaryContent
                   book={book}
-                  activeTab={activeTab}
+                  activeTab={activeTab as string}
                   currentItemIndex={currentItemIndex}
-                  onSectionChange={handleSectionChange}
+                  onSectionChange={handleSectionChange as (section: string) => void}
                   onItemChange={handleItemChange}
                   onPrevious={handlePrevious}
                   onNext={handleNext}
@@ -388,7 +391,6 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
             isOpen={isContentsOpen}
           />
         </>
-      )}
     </div>
   );
 }

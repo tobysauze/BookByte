@@ -70,10 +70,12 @@ export default async function LibraryPage() {
     ]);
 
     const ownBooks = (ownBooksResult.data ?? []) as SupabaseSummary[];
-    const savedBooks = (savedBooksResult.data ?? []).map(item => ({
-      ...item.books,
-      id: item.books.id,
-    })) as SupabaseSummary[];
+    const savedBooks = (savedBooksResult.data ?? [])
+      .filter(item => item.books !== null)
+      .map(item => ({
+        ...(item.books as unknown as SupabaseSummary),
+        id: (item.books as unknown as SupabaseSummary).id,
+      })) as SupabaseSummary[];
 
     // Combine both lists, removing duplicates (in case they saved their own book)
     const bookMap = new Map<string, SupabaseSummary>();

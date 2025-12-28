@@ -49,6 +49,7 @@ export function BookCard({
   // Check if this is raw text format (new format)
   const isRawText = summary && typeof summary === 'object' && 'raw_text' in summary && typeof (summary as Record<string, unknown>).raw_text === 'string';
   const rawText = isRawText ? (summary as { raw_text: string }).raw_text : null;
+  const isStructuredSummary = summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
 
   // Generate a category based on the book content or use a default
   const getCategory = () => {
@@ -57,8 +58,8 @@ export function BookCard({
     if (isRawText && rawText) {
       // Use raw text (first 1000 chars for performance)
       textToAnalyze = rawText.substring(0, 1000).toLowerCase();
-    } else if (summary.quick_summary && typeof summary.quick_summary === 'string') {
-      textToAnalyze = summary.quick_summary.toLowerCase();
+    } else if (isStructuredSummary && (summary as { quick_summary: string }).quick_summary) {
+      textToAnalyze = (summary as { quick_summary: string }).quick_summary.toLowerCase();
     } else {
       return 'NON-FICTION'; // Default if no text available
     }
@@ -99,11 +100,14 @@ export function BookCard({
 
   // Get display summary - prefer short_summary, then quick_summary, then first 200 chars of raw_text
   const getDisplaySummary = () => {
-    if (summary.short_summary && typeof summary.short_summary === 'string') {
-      return summary.short_summary;
-    }
-    if (summary.quick_summary && typeof summary.quick_summary === 'string') {
-      return summary.quick_summary.substring(0, 200) + (summary.quick_summary.length > 200 ? '...' : '');
+    if (isStructuredSummary) {
+      const structured = summary as { short_summary?: string; quick_summary?: string };
+      if (structured.short_summary && typeof structured.short_summary === 'string') {
+        return structured.short_summary;
+      }
+      if (structured.quick_summary && typeof structured.quick_summary === 'string') {
+        return structured.quick_summary.substring(0, 200) + (structured.quick_summary.length > 200 ? '...' : '');
+      }
     }
     if (isRawText && rawText) {
       // For raw text, use first 200 characters
@@ -175,13 +179,17 @@ export function BookCard({
         </p>
 
         {/* Stats - Only show for structured format */}
-        {!isRawText && (
+        {!isRawText && isStructuredSummary && (
           <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
             <span>
-              {summary.key_ideas && Array.isArray(summary.key_ideas) ? summary.key_ideas.length : 0} key ideas
+              {(summary as { key_ideas?: unknown[] }).key_ideas && Array.isArray((summary as { key_ideas: unknown[] }).key_ideas) 
+                ? (summary as { key_ideas: unknown[] }).key_ideas.length 
+                : 0} key ideas
             </span>
             <span>
-              {summary.chapters && Array.isArray(summary.chapters) ? summary.chapters.length : 0} chapters
+              {(summary as { chapters?: unknown[] }).chapters && Array.isArray((summary as { chapters: unknown[] }).chapters) 
+                ? (summary as { chapters: unknown[] }).chapters.length 
+                : 0} chapters
             </span>
           </div>
         )}

@@ -2,9 +2,12 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 
-type SummarySectionKey = keyof SummaryPayload;
+// Only use structured summary keys (not raw_text variant)
+type SummarySectionKey = keyof z.infer<typeof summarySchema>;
 
 type UniversalPaginationProps = {
   summary?: SummaryPayload;

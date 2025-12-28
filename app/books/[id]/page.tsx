@@ -105,7 +105,7 @@ export default async function BookDetailPage({ params }: BookPageParams) {
       {isOwner && typedBook.local_file_path && (
         <BookAnalysis 
           bookId={typedBook.id} 
-          initialResults={typedBook.analysis_results}
+          initialResults={typedBook.analysis_results as any}
         />
       )}
     </div>

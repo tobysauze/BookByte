@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { generateSpeechFromText } from "@/lib/elevenlabs";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
-type SummarySectionKey = keyof SummaryPayload;
+// Only use structured summary keys (not raw_text variant)
+type SummarySectionKey = keyof z.infer<typeof summarySchema>;
 
 const SECTION_LABELS: Record<SummarySectionKey, string> = {
   quick_summary: "Quick Summary",
+  short_summary: "Short Summary",
   key_ideas: "Key Ideas",
   chapters: "Chapters",
   actionable_insights: "Insights",
   quotes: "Quotes",
+  ai_provider: "AI Provider",
 };
 
 export async function POST(request: NextRequest) {
@@ -118,22 +123,33 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function extractSectionText(summary: SummaryPayload, section: SummarySectionKey) {
+function extractSectionText(summary: SummaryPayload, section: SummarySectionKey): string {
+  // Type guard to ensure summary is structured
+  if (!('quick_summary' in summary) || typeof summary.quick_summary !== 'string') {
+    throw new Error("Cannot extract section text from raw text summary");
+  }
+  
+  const structuredSummary = summary as z.infer<typeof summarySchema>;
+  
   switch (section) {
     case "quick_summary":
-      return summary.quick_summary;
+      return structuredSummary.quick_summary;
+    case "short_summary":
+      return structuredSummary.short_summary;
     case "key_ideas":
-      return summary.key_ideas
+      return structuredSummary.key_ideas
         .map((idea) => `${idea.title}: ${idea.text}`)
         .join("\n");
     case "chapters":
-      return summary.chapters
+      return structuredSummary.chapters
         .map((chapter) => `${chapter.title}: ${chapter.summary}`)
         .join("\n");
     case "actionable_insights":
-      return summary.actionable_insights.join("\n");
+      return structuredSummary.actionable_insights.join("\n");
     case "quotes":
-      return summary.quotes.join("\n");
+      return structuredSummary.quotes.join("\n");
+    case "ai_provider":
+      return structuredSummary.ai_provider || "Unknown";
     default:
       return JSON.stringify(summary);
   }
