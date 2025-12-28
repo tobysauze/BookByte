@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { summarySchema, type SummaryPayload } from "@/lib/schemas";
 import { getUserRole } from "@/lib/user-roles";
@@ -77,7 +78,7 @@ export async function POST(
     // Use AI to parse the summary text into structured format
     console.log("📝 Parsing uploaded summary text...");
     
-    let parsedSummary: SummaryPayload;
+    let parsedSummary: z.infer<typeof summarySchema>;
     try {
       const parsePrompt = `You are organizing a book summary that was written elsewhere. Your task is to parse the following text and organize it into the required JSON structure.
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { join } from "path";
+import { z } from "zod";
 
 import { extractTextFromFile } from "@/lib/pdf";
 import { generateGeminiSummary, isGeminiConfigured } from "@/lib/gemini";
@@ -8,6 +9,7 @@ import { detectGaps, type Gap, type GapReport } from "@/lib/gap-detection";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { canEditBook } from "@/lib/user-roles";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 import OpenAI from "openai";
 
 export const runtime = "nodejs";
@@ -181,13 +183,40 @@ export async function POST(
         throw new Error("Enhanced summary is invalid");
       }
 
-      // Ensure all required fields exist
-      if (!enhancedSummary.quick_summary) enhancedSummary.quick_summary = currentSummary.quick_summary || "";
-      if (!enhancedSummary.short_summary) enhancedSummary.short_summary = currentSummary.short_summary || "";
-      if (!enhancedSummary.key_ideas) enhancedSummary.key_ideas = currentSummary.key_ideas || [];
-      if (!enhancedSummary.chapters) enhancedSummary.chapters = currentSummary.chapters || [];
-      if (!enhancedSummary.actionable_insights) enhancedSummary.actionable_insights = currentSummary.actionable_insights || [];
-      if (!enhancedSummary.quotes) enhancedSummary.quotes = currentSummary.quotes || [];
+      // Type guard: Check if summary is structured format (not raw_text)
+      const isStructuredSummary = (summary: SummaryPayload): summary is z.infer<typeof summarySchema> => {
+        return 'quick_summary' in summary && typeof summary.quick_summary === 'string';
+      };
+
+      // Helper function to ensure summary is structured (throws if not)
+      const ensureStructuredSummary = (summary: SummaryPayload): z.infer<typeof summarySchema> => {
+        if (!isStructuredSummary(summary)) {
+          throw new Error("Summary must be in structured format for enhancement");
+        }
+        return summary;
+      };
+
+      // Ensure all required fields exist (only for structured summaries)
+      if (isStructuredSummary(enhancedSummary)) {
+        if (!enhancedSummary.quick_summary) {
+          enhancedSummary.quick_summary = isStructuredSummary(currentSummary) ? (currentSummary.quick_summary || "") : "";
+        }
+        if (!enhancedSummary.short_summary) {
+          enhancedSummary.short_summary = isStructuredSummary(currentSummary) ? (currentSummary.short_summary || "") : "";
+        }
+        if (!enhancedSummary.key_ideas) {
+          enhancedSummary.key_ideas = isStructuredSummary(currentSummary) ? (currentSummary.key_ideas || []) : [];
+        }
+        if (!enhancedSummary.chapters) {
+          enhancedSummary.chapters = isStructuredSummary(currentSummary) ? (currentSummary.chapters || []) : [];
+        }
+        if (!enhancedSummary.actionable_insights) {
+          enhancedSummary.actionable_insights = isStructuredSummary(currentSummary) ? (currentSummary.actionable_insights || []) : [];
+        }
+        if (!enhancedSummary.quotes) {
+          enhancedSummary.quotes = isStructuredSummary(currentSummary) ? (currentSummary.quotes || []) : [];
+        }
+      }
       
       console.log(`Summary enhanced successfully. ${changes.length} changes tracked.`);
       
@@ -409,7 +438,8 @@ export async function GET(
       const file = new File([fileBuffer], book.title || "book", {
         type: getMimeTypeFromPath(book.local_file_path),
       });
-      originalText = await extractTextFromFile(file);
+      const extractedData = await extractTextFromFile(file);
+      originalText = extractedData.text;
     } catch (fileError) {
       console.error("Error reading original file:", fileError);
       return NextResponse.json(
@@ -492,6 +522,11 @@ async function enhanceSummary(
   return enhancedSummary;
 }
 
+// Type guard helper
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return 'quick_summary' in summary && typeof summary.quick_summary === 'string';
+}
+
 async function enhanceChapters(
   bookText: string,
   summary: SummaryPayload,
@@ -508,6 +543,10 @@ async function enhanceChapters(
     action: "added" | "modified";
   }>
 ) {
+  if (!isStructuredSummary(summary)) {
+    throw new Error("Summary must be in structured format to enhance chapters");
+  }
+  
   if (!summary.chapters) {
     summary.chapters = [];
   }
@@ -676,6 +715,10 @@ async function enhanceKeyIdeas(
     action: "added" | "modified";
   }>
 ) {
+  if (!isStructuredSummary(summary)) {
+    throw new Error("Summary must be in structured format to enhance key ideas");
+  }
+  
   if (!summary.key_ideas) {
     summary.key_ideas = [];
   }
@@ -700,6 +743,10 @@ async function enhanceInsights(
     action: "added" | "modified";
   }>
 ) {
+  if (!isStructuredSummary(summary)) {
+    throw new Error("Summary must be in structured format to enhance insights");
+  }
+  
   if (!summary.actionable_insights) {
     summary.actionable_insights = [];
   }
@@ -724,6 +771,10 @@ async function enhanceQuotes(
     action: "added" | "modified";
   }>
 ) {
+  if (!isStructuredSummary(summary)) {
+    throw new Error("Summary must be in structured format to enhance quotes");
+  }
+  
   if (!summary.quotes) {
     summary.quotes = [];
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { summarySchema, flexibleSummarySchema, rawTextSummarySchema } from "@/lib/schemas";
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as SavePayload;
     
     // Try raw text schema first (new format), then strict schema, then flexible schema
-    let parsedSummary = rawTextSummarySchema.safeParse(body.summary);
+    let parsedSummary: z.SafeParseReturnType<any, any> = rawTextSummarySchema.safeParse(body.summary);
     
     if (!parsedSummary.success) {
       // Try structured schema (legacy format)
