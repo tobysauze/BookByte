@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Supabase URL and anon key must be set for auth callbacks. Check your environment variables.",
-  );
+function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
 }
 
-// TypeScript type assertion - we know these are strings after the check above
-const SUPABASE_URL: string = supabaseUrl;
-const SUPABASE_ANON_KEY: string = supabaseAnonKey;
+const SUPABASE_URL = getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL");
+const SUPABASE_ANON_KEY = getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
 async function handleAuth(request: NextRequest) {
   const requestUrl = new URL(request.url);
