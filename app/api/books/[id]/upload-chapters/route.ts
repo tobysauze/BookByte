@@ -83,14 +83,14 @@ function combineChapterSummaries(
   bookAuthor?: string
 ): SummaryPayload {
   // All chapter summaries should be structured (they come from generateStructuredSummary)
-  const structuredSummaries = chapterSummaries.filter(isStructuredSummary);
+  const structuredSummaries: z.infer<typeof summarySchema>[] = chapterSummaries.filter(isStructuredSummary);
   
   if (structuredSummaries.length === 0) {
     throw new Error("No valid structured summaries to combine");
   }
   
   // Combine all chapters
-  const allChapters = structuredSummaries.flatMap((cs) => cs.chapters);
+  const allChapters = structuredSummaries.flatMap((cs: z.infer<typeof summarySchema>) => cs.chapters);
   
   // Combine all key ideas (deduplicate by title)
   const keyIdeasMap = new Map<string, { title: string; text: string }>();
