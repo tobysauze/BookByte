@@ -1,0 +1,127 @@
+"use client";
+
+import { BookOpen, Lightbulb, List, Target, Quote, Headphones, Menu } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import type { SummaryPayload } from "@/lib/schemas";
+
+type SummarySectionKey = keyof SummaryPayload;
+
+type VerticalSummaryNavProps = {
+  summary: SummaryPayload;
+  activeTab: SummarySectionKey;
+  onTabChange: (tab: SummarySectionKey) => void;
+  onGenerateAudio?: (section: SummarySectionKey) => Promise<string | void> | string | void;
+  isGenerating?: boolean;
+  onContentsClick?: () => void;
+};
+
+const sectionOrder: SummarySectionKey[] = [
+  "quick_summary",
+  "key_ideas",
+  "chapters",
+  "actionable_insights",
+  "quotes",
+];
+
+const sectionLabels: Record<SummarySectionKey, string> = {
+  quick_summary: "Quick Summary",
+  key_ideas: "Key Ideas",
+  chapters: "Chapters",
+  actionable_insights: "Insights",
+  quotes: "Quotes",
+};
+
+const sectionIcons: Record<SummarySectionKey, LucideIcon> = {
+  quick_summary: BookOpen,
+  key_ideas: Lightbulb,
+  chapters: List,
+  actionable_insights: Target,
+  quotes: Quote,
+};
+
+export function VerticalSummaryNav({
+  summary,
+  activeTab,
+  onTabChange,
+  onGenerateAudio,
+  isGenerating,
+  onContentsClick,
+}: VerticalSummaryNavProps) {
+  return (
+    <div className="sticky left-0 top-24 z-40 h-[calc(100vh-6rem)] w-36 border-r border-[rgb(var(--border))] bg-[rgb(var(--background))] overflow-y-auto">
+      <div className="p-3 space-y-2">
+        {/* Contents Button */}
+        {onContentsClick && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onContentsClick}
+            className="w-full mb-4"
+          >
+            <Menu className="h-4 w-4 mr-2" />
+            Contents
+          </Button>
+        )}
+
+        {/* Navigation Items */}
+        <nav className="space-y-2">
+          {sectionOrder.map((section) => {
+            const isActive = activeTab === section;
+            const Icon = sectionIcons[section];
+            const label = sectionLabels[section];
+            
+            // Get count for each section
+            let count = 0;
+            if (section === "key_ideas") count = summary.key_ideas.length;
+            else if (section === "chapters") count = summary.chapters.length;
+            else if (section === "actionable_insights") count = summary.actionable_insights.length;
+            else if (section === "quotes") count = summary.quotes.length;
+
+            return (
+              <Button
+                key={section}
+                variant={isActive ? "default" : "ghost"}
+                className={`w-full justify-start h-auto p-2 text-left ${
+                  isActive
+                    ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                    : "hover:bg-[rgb(var(--muted))]"
+                }`}
+                onClick={() => onTabChange(section)}
+              >
+                <div className="flex items-center gap-2 w-full">
+                  <Icon className="h-4 w-4" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-xs">{label}</div>
+                    {count > 0 && (
+                      <div className="text-xs opacity-70 mt-0.5">
+                        {count}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Button>
+            );
+          })}
+        </nav>
+
+        {/* Listen Button */}
+        {onGenerateAudio && (
+          <div className="mt-8 pt-6 border-t border-[rgb(var(--border))]">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={Boolean(isGenerating)}
+              onClick={() => onGenerateAudio(activeTab)}
+              className="w-full"
+            >
+              <Headphones className="h-4 w-4 mr-2" />
+              {isGenerating ? "Generating…" : "Listen"}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

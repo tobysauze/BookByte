@@ -1,0 +1,27 @@
+<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main book body - clean rectangle -->
+  <rect
+    x="3"
+    y="6"
+    width="26"
+    height="20"
+    rx="1"
+    ry="1"
+    fill="#3B82F6"
+  />
+  
+  <!-- Bite mark - more accurate curved cut-out -->
+  <path
+    d="M19 8C19.5 7.5 20.5 7.5 21.5 8C22.5 8.5 23 9.5 23 10.5C23 11.2 22.8 11.8 22.5 12.2C22.8 12.6 23 13.2 23 13.9C23 14.9 22.5 15.9 21.5 16.4C20.5 16.9 19.5 16.9 19 16.4C18.5 15.9 18 14.9 18 13.9C18 13.2 18.2 12.6 18.5 12.2C18.2 11.8 18 11.2 18 10.5C18 9.5 18.5 8.5 19 8Z"
+    fill="white"
+  />
+  
+  <!-- Book spine - clean white line -->
+  <rect
+    x="3"
+    y="24"
+    width="26"
+    height="2"
+    fill="white"
+  />
+</svg>

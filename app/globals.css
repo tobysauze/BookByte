@@ -1,26 +1,111 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 1rem;
+  /* Text preferences defaults */
+  --text-font-family: system-ui, -apple-system, sans-serif;
+  --text-font-size: 1.125rem; /* 18px */
+  --text-align: center;
+}
+
+/* Light theme (default) */
+:root.light {
+  color-scheme: light;
+  --background: 255 255 255;
+  --foreground: 18 18 23;
+  --muted: 245 245 244;
+  --muted-foreground: 87 83 78;
+  --card: 255 255 255;
+  --card-foreground: 18 18 23;
+  --accent: 80 70 229;
+  --accent-foreground: 255 255 255;
+  --border: 226 232 240;
+}
+
+/* Dark theme */
+:root.dark {
+  color-scheme: dark;
+  --background: 9 9 11;
+  --foreground: 236 233 230;
+  --muted: 32 32 36;
+  --muted-foreground: 161 161 170;
+  --card: 18 18 23;
+  --card-foreground: 236 233 230;
+  --accent: 129 140 248;
+  --accent-foreground: 18 18 23;
+  --border: 38 38 45;
+}
+
+/* Default to dark theme if no class is set */
+:root:not(.light):not(.dark) {
+  color-scheme: dark;
+  --background: 9 9 11;
+  --foreground: 236 233 230;
+  --muted: 32 32 36;
+  --muted-foreground: 161 161 170;
+  --card: 18 18 23;
+  --card-foreground: 236 233 230;
+  --accent: 129 140 248;
+  --accent-foreground: 18 18 23;
+  --border: 38 38 45;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: rgb(var(--border));
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.prose-muted {
+  color: rgb(var(--muted-foreground));
+}
+
+/* Line clamp utilities */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Hide default browser drag preview/cursors */
+[draggable="true"] {
+  -webkit-user-drag: element;
+}
+
+[draggable="true"]:active {
+  cursor: grabbing !important;
+}
+
+/* Ensure empty drag image is invisible but still renderable */
+#empty-drag-image {
+  position: absolute !important;
+  top: 0px !important;
+  left: 0px !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  z-index: -1 !important;
+  background: transparent !important;
 }
