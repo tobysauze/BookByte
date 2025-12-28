@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint"
   },
+  "version": "0.1.1",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
