@@ -5,10 +5,12 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
 
 type PaginatedChaptersProps = {
-  chapters: SummaryPayload["chapters"];
+  chapters: z.infer<typeof summarySchema>["chapters"];
 };
 
 export function PaginatedChapters({ chapters }: PaginatedChaptersProps) {

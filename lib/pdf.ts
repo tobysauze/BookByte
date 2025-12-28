@@ -16,9 +16,10 @@ export interface TextWithLocations {
 
 export async function extractTextFromFile(file: File | Blob): Promise<TextWithLocations> {
   const mimeType = file.type || "application/pdf";
+  const fileName = "name" in file ? (file as File).name : undefined;
   const arrayBuffer = await file.arrayBuffer();
 
-  if (mimeType === "application/pdf" || file.name?.endsWith(".pdf")) {
+  if (mimeType === "application/pdf" || fileName?.endsWith(".pdf")) {
     return extractTextFromPdfBuffer(arrayBuffer);
   }
 

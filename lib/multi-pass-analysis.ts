@@ -1,5 +1,17 @@
 import { generateStructuredSummary } from "./openrouter";
+import { z } from "zod";
 import { summarySchema, type SummaryPayload } from "./schemas";
+
+function isStructuredSummary(
+  summary: SummaryPayload,
+): summary is z.infer<typeof summarySchema> {
+  return (
+    typeof summary === "object" &&
+    summary !== null &&
+    "quick_summary" in summary &&
+    typeof (summary as Record<string, unknown>).quick_summary === "string"
+  );
+}
 
 export interface BookStructure {
   title: string;
@@ -224,7 +236,6 @@ ${this.text.substring(0, 20000)}
       return structure as BookStructure;
     } catch (error) {
       console.error("Error analyzing book structure:", error);
-      console.log("Raw response that failed to parse:", responseText?.substring(0, 1000));
       // Fallback: create a basic structure
       return {
         title: this.title,
@@ -282,13 +293,30 @@ ${this.text}`;
     needsAdditionalPass: boolean;
   } {
     const allChapterTitles = structure.chapters.map(ch => ch.title.toLowerCase());
-    const summaryText = [
-      summary.quick_summary,
-      ...summary.key_ideas.map(ki => ki.text),
-      ...summary.chapters.map(ch => ch.title + " " + ch.summary),
-      ...summary.actionable_insights,
-      ...summary.quotes
-    ].join(" ").toLowerCase();
+    const summaryText = (() => {
+      if (isStructuredSummary(summary)) {
+        return [
+          summary.quick_summary,
+          ...summary.key_ideas.map((ki) => ki.text),
+          ...summary.chapters.map((ch) => `${ch.title} ${ch.summary}`),
+          ...summary.actionable_insights,
+          ...summary.quotes,
+        ]
+          .join(" ")
+          .toLowerCase();
+      }
+
+      // Raw-text / custom-prompt summary: fall back to searching whatever text we have.
+      const rawText =
+        typeof summary === "object" &&
+        summary !== null &&
+        "raw_text" in summary &&
+        typeof (summary as Record<string, unknown>).raw_text === "string"
+          ? ((summary as Record<string, unknown>).raw_text as string)
+          : JSON.stringify(summary);
+
+      return rawText.toLowerCase();
+    })();
 
     const chaptersCovered: string[] = [];
     const chaptersMissing: string[] = [];
@@ -301,7 +329,11 @@ ${this.text}`;
       const isCovered = 
         summaryText.includes(chapterTitle) || // Exact title match
         titleWords.some(word => summaryText.includes(word)) || // Key words
-        summary.chapters.some(ch => ch.title.toLowerCase().includes(chapterTitle)) || // In chapter summaries
+        (isStructuredSummary(summary)
+          ? summary.chapters.some((ch) =>
+              ch.title.toLowerCase().includes(chapterTitle),
+            )
+          : false) || // In chapter summaries
         this.checkChapterNumberReference(chapterTitle, summaryText, structure); // Chapter number references
 
       if (isCovered) {
@@ -646,13 +678,54 @@ Return the analysis in the same JSON format as the original summary, but focus o
    * Merge two summaries together
    */
   private mergeSummaries(original: SummaryPayload, additional: SummaryPayload): SummaryPayload {
+    if (isStructuredSummary(original) && isStructuredSummary(additional)) {
+      return {
+        ai_provider: original.ai_provider ?? additional.ai_provider,
+        short_summary: original.short_summary,
+        quick_summary: `${original.quick_summary}\n\n${additional.quick_summary}`,
+        key_ideas: [...original.key_ideas, ...additional.key_ideas],
+        chapters: [...original.chapters, ...additional.chapters],
+        actionable_insights: [
+          ...original.actionable_insights,
+          ...additional.actionable_insights,
+        ],
+        quotes: [...original.quotes, ...additional.quotes],
+      };
+    }
+
+    // Fallbacks for raw-text / custom-prompt summaries.
+    if (isStructuredSummary(original)) return original;
+    if (isStructuredSummary(additional)) return additional;
+
+    const originalRaw =
+      typeof original === "object" &&
+      original !== null &&
+      "raw_text" in original &&
+      typeof (original as Record<string, unknown>).raw_text === "string"
+        ? ((original as Record<string, unknown>).raw_text as string)
+        : JSON.stringify(original);
+
+    const additionalRaw =
+      typeof additional === "object" &&
+      additional !== null &&
+      "raw_text" in additional &&
+      typeof (additional as Record<string, unknown>).raw_text === "string"
+        ? ((additional as Record<string, unknown>).raw_text as string)
+        : JSON.stringify(additional);
+
     return {
-      ai_provider: original.ai_provider,
-      quick_summary: original.quick_summary + "\n\n" + additional.quick_summary,
-      key_ideas: [...original.key_ideas, ...additional.key_ideas],
-      chapters: [...original.chapters, ...additional.chapters],
-      actionable_insights: [...original.actionable_insights, ...additional.actionable_insights],
-      quotes: [...original.quotes, ...additional.quotes]
+      raw_text: `${originalRaw}\n\n${additionalRaw}`.trim(),
+      ai_provider:
+        (typeof original === "object" &&
+        original !== null &&
+        "ai_provider" in original
+          ? ((original as Record<string, unknown>).ai_provider as string | undefined)
+          : undefined) ??
+        (typeof additional === "object" &&
+        additional !== null &&
+        "ai_provider" in additional
+          ? ((additional as Record<string, unknown>).ai_provider as string | undefined)
+          : undefined),
     };
   }
 }

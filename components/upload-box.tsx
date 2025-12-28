@@ -76,6 +76,11 @@ function countWords(text: string): number {
   return text.split(/\s+/).filter(word => word.length > 0).length;
 }
 
+// Estimate tokens from text (rough approximation: 1 token ≈ 4 characters)
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
 // Estimate words from file (async since we need to read file)
 async function estimateWordsFromFile(file: File): Promise<number> {
   try {

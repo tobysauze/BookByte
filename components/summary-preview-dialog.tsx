@@ -15,29 +15,46 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
+
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
 
 // Minimum word count target
 const MIN_WORD_COUNT = 10000;
 
 // Convert structured summary to continuous text format
 function formatSummaryAsContinuousText(summary: SummaryPayload): string {
+  // Ensure summary is structured
+  if (!isStructuredSummary(summary)) {
+    // For raw text summaries, return the raw text
+    if ('raw_text' in summary && typeof (summary as { raw_text: string }).raw_text === 'string') {
+      return (summary as { raw_text: string }).raw_text;
+    }
+    return "";
+  }
+  
+  const structuredSummary = summary;
   const parts: string[] = [];
   
   // Short summary
-  if (summary.short_summary) {
-    parts.push(`SHORT SUMMARY\n${"=".repeat(50)}\n\n${summary.short_summary}\n\n`);
+  if (structuredSummary.short_summary) {
+    parts.push(`SHORT SUMMARY\n${"=".repeat(50)}\n\n${structuredSummary.short_summary}\n\n`);
   }
   
   // Quick summary
-  if (summary.quick_summary) {
-    parts.push(`QUICK SUMMARY\n${"=".repeat(50)}\n\n${summary.quick_summary}\n\n`);
+  if (structuredSummary.quick_summary) {
+    parts.push(`QUICK SUMMARY\n${"=".repeat(50)}\n\n${structuredSummary.quick_summary}\n\n`);
   }
   
   // Key ideas
-  if (summary.key_ideas && summary.key_ideas.length > 0) {
+  if (structuredSummary.key_ideas && structuredSummary.key_ideas.length > 0) {
     parts.push(`KEY IDEAS\n${"=".repeat(50)}\n\n`);
-    summary.key_ideas.forEach((idea, index) => {
+    structuredSummary.key_ideas.forEach((idea, index) => {
       parts.push(`${index + 1}. ${idea.title}\n\n${idea.text}\n\n`);
     });
   }
@@ -73,7 +90,7 @@ function formatSummaryAsContinuousText(summary: SummaryPayload): string {
   if (customKeys.length > 0) {
     parts.push(`ADDITIONAL CONTENT\n${"=".repeat(50)}\n\n`);
     customKeys.forEach(key => {
-      const value = (summary as Record<string, unknown>)[key];
+      const value = (structuredSummary as Record<string, unknown>)[key];
       if (value !== undefined && value !== null) {
         parts.push(`${key.toUpperCase().replace(/_/g, ' ')}\n\n`);
         if (typeof value === 'string') {
@@ -101,13 +118,24 @@ function countSummaryWords(summary: SummaryPayload): number {
   let wordCount = 0;
   
   // Count words in quick_summary
-  if (summary.quick_summary) {
-    wordCount += summary.quick_summary.split(/\s+/).filter(word => word.length > 0).length;
+  // Ensure summary is structured
+  if (!isStructuredSummary(summary)) {
+    // For raw text summaries, count words in raw_text
+    if ('raw_text' in summary && typeof (summary as { raw_text: string }).raw_text === 'string') {
+      return (summary as { raw_text: string }).raw_text.split(/\s+/).filter(word => word.length > 0).length;
+    }
+    return 0;
+  }
+  
+  const structuredSummary = summary;
+  
+  if (structuredSummary.quick_summary) {
+    wordCount += structuredSummary.quick_summary.split(/\s+/).filter(word => word.length > 0).length;
   }
   
   // Count words in key_ideas (title + text)
-  if (summary.key_ideas) {
-    summary.key_ideas.forEach(idea => {
+  if (structuredSummary.key_ideas) {
+    structuredSummary.key_ideas.forEach(idea => {
       if (idea.title) {
         wordCount += idea.title.split(/\s+/).filter(word => word.length > 0).length;
       }
@@ -118,8 +146,8 @@ function countSummaryWords(summary: SummaryPayload): number {
   }
   
   // Count words in chapters (title + summary)
-  if (summary.chapters) {
-    summary.chapters.forEach(chapter => {
+  if (structuredSummary.chapters) {
+    structuredSummary.chapters.forEach(chapter => {
       if (chapter.title) {
         wordCount += chapter.title.split(/\s+/).filter(word => word.length > 0).length;
       }
@@ -130,8 +158,8 @@ function countSummaryWords(summary: SummaryPayload): number {
   }
   
   // Count words in actionable_insights
-  if (summary.actionable_insights) {
-    summary.actionable_insights.forEach(insight => {
+  if (structuredSummary.actionable_insights) {
+    structuredSummary.actionable_insights.forEach(insight => {
       if (insight) {
         wordCount += insight.split(/\s+/).filter(word => word.length > 0).length;
       }
@@ -139,8 +167,8 @@ function countSummaryWords(summary: SummaryPayload): number {
   }
   
   // Count words in quotes
-  if (summary.quotes) {
-    summary.quotes.forEach(quote => {
+  if (structuredSummary.quotes) {
+    structuredSummary.quotes.forEach(quote => {
       if (quote) {
         wordCount += quote.split(/\s+/).filter(word => word.length > 0).length;
       }
@@ -304,7 +332,7 @@ export function SummaryPreviewDialog({
               <p className="text-sm text-[rgb(var(--muted-foreground))]">by {metadata.author}</p>
             )}
             <div className="flex items-center gap-3 mt-2 flex-wrap">
-              {summary.ai_provider && (
+              {isStructuredSummary(summary) && summary.ai_provider && (
                 <Badge className="bg-[rgb(var(--accent))]/10 text-[rgb(var(--accent))]">
                   {summary.ai_provider}
                 </Badge>

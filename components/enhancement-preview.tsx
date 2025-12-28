@@ -108,7 +108,7 @@ export function EnhancementPreview({
           } else if (change.action === "modified") {
             // Find by title (more reliable than index)
             const chapterIndex = finalSummary.chapters.findIndex(
-              c => c.title === change.title
+              (c: { title: string }) => c.title === change.title
             );
             if (chapterIndex >= 0) {
               finalSummary.chapters[chapterIndex].summary = change.enhanced;

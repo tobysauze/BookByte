@@ -1,4 +1,5 @@
 import { summarySchema, type SummaryPayload } from "@/lib/schemas";
+import { z } from "zod";
 
 const { OPENROUTER_API_KEY, OPENROUTER_MODEL } = process.env;
 
@@ -35,6 +36,17 @@ const DEFAULT_MODEL = OPENROUTER_MODEL || "openai/gpt-4o";
 // Minimum word count target
 const MIN_WORD_COUNT = 10000;
 
+function isStructuredSummary(
+  summary: SummaryPayload,
+): summary is z.infer<typeof summarySchema> {
+  return (
+    typeof summary === "object" &&
+    summary !== null &&
+    "quick_summary" in summary &&
+    typeof (summary as Record<string, unknown>).quick_summary === "string"
+  );
+}
+
 /**
  * Count words in a summary
  */
@@ -45,73 +57,60 @@ function countSummaryWords(summary: SummaryPayload): number {
     return rawText.split(/\s+/).filter(word => word.length > 0).length;
   }
   
-  let wordCount = 0;
-  
-  // Count words in quick_summary
-  if (summary.quick_summary && typeof summary.quick_summary === 'string') {
-    wordCount += summary.quick_summary.split(/\s+/).filter(word => word.length > 0).length;
+  // Structured format
+  if (isStructuredSummary(summary)) {
+    let wordCount = 0;
+
+    wordCount += summary.quick_summary
+      .split(/\s+/)
+      .filter((word) => word.length > 0).length;
+
+    summary.key_ideas.forEach((idea) => {
+      wordCount += idea.title.split(/\s+/).filter((word) => word.length > 0).length;
+      wordCount += idea.text.split(/\s+/).filter((word) => word.length > 0).length;
+    });
+
+    summary.chapters.forEach((chapter) => {
+      wordCount += chapter.title
+        .split(/\s+/)
+        .filter((word) => word.length > 0).length;
+      wordCount += chapter.summary
+        .split(/\s+/)
+        .filter((word) => word.length > 0).length;
+    });
+
+    summary.actionable_insights.forEach((insight) => {
+      wordCount += insight.split(/\s+/).filter((word) => word.length > 0).length;
+    });
+
+    summary.quotes.forEach((quote) => {
+      wordCount += quote.split(/\s+/).filter((word) => word.length > 0).length;
+    });
+
+    return wordCount;
   }
-  
-  // Count words in key_ideas (title + text)
-  if (summary.key_ideas && Array.isArray(summary.key_ideas)) {
-    summary.key_ideas.forEach((idea: any) => {
-      if (idea.title && typeof idea.title === 'string') {
-        wordCount += idea.title.split(/\s+/).filter(word => word.length > 0).length;
-      }
-      if (idea.text && typeof idea.text === 'string') {
-        wordCount += idea.text.split(/\s+/).filter(word => word.length > 0).length;
+
+  // Custom prompt payload (Record<string, unknown>)
+  if (typeof summary === "object" && summary !== null) {
+    let wordCount = 0;
+    const summaryObj = summary as Record<string, unknown>;
+
+    Object.values(summaryObj).forEach((value) => {
+      if (typeof value === "string") {
+        wordCount += value.split(/\s+/).filter((word) => word.length > 0).length;
+      } else if (Array.isArray(value)) {
+        value.forEach((item) => {
+          if (typeof item === "string") {
+            wordCount += item.split(/\s+/).filter((word) => word.length > 0).length;
+          }
+        });
       }
     });
+
+    return wordCount;
   }
-  
-  // Count words in chapters (title + summary)
-  if (summary.chapters && Array.isArray(summary.chapters)) {
-    summary.chapters.forEach((chapter: any) => {
-      if (chapter.title && typeof chapter.title === 'string') {
-        wordCount += chapter.title.split(/\s+/).filter(word => word.length > 0).length;
-      }
-      if (chapter.summary && typeof chapter.summary === 'string') {
-        wordCount += chapter.summary.split(/\s+/).filter(word => word.length > 0).length;
-      }
-    });
-  }
-  
-  // Count words in actionable_insights
-  if (summary.actionable_insights && Array.isArray(summary.actionable_insights)) {
-    summary.actionable_insights.forEach((insight: any) => {
-      if (typeof insight === 'string') {
-        wordCount += insight.split(/\s+/).filter(word => word.length > 0).length;
-      }
-    });
-  }
-  
-  // Count words in quotes
-  if (summary.quotes && Array.isArray(summary.quotes)) {
-    summary.quotes.forEach((quote: any) => {
-      if (typeof quote === 'string') {
-        wordCount += quote.split(/\s+/).filter(word => word.length > 0).length;
-      }
-    });
-  }
-  
-  // Count words in custom fields (for custom prompts)
-  const standardKeys = ['short_summary', 'quick_summary', 'key_ideas', 'chapters', 'actionable_insights', 'quotes', 'ai_provider'];
-  const customKeys = Object.keys(summary).filter(key => !standardKeys.includes(key));
-  
-  customKeys.forEach(key => {
-    const value = (summary as Record<string, unknown>)[key];
-    if (typeof value === 'string') {
-      wordCount += value.split(/\s+/).filter(word => word.length > 0).length;
-    } else if (Array.isArray(value)) {
-      value.forEach(item => {
-        if (typeof item === 'string') {
-          wordCount += item.split(/\s+/).filter(word => word.length > 0).length;
-        }
-      });
-    }
-  });
-  
-  return wordCount;
+
+  return 0;
 }
 
 /**
@@ -153,25 +152,36 @@ function identifySectionsNeedingExpansion(summary: SummaryPayload, targetWordCou
     targetWords: number;
     content: string;
   }> = [];
+
+  // Expansion targeting is only supported for structured summaries.
+  if (!isStructuredSummary(summary)) {
+    return sectionsToExpand;
+  }
+
+  const structured = summary;
   
   // Check quick_summary
-  if (summary.quick_summary && typeof summary.quick_summary === 'string') {
-    const words = summary.quick_summary.split(/\s+/).filter(word => word.length > 0).length;
+  if (structured.quick_summary && typeof structured.quick_summary === 'string') {
+    const words = structured.quick_summary
+      .split(/\s+/)
+      .filter((word: string) => word.length > 0).length;
     if (words < scaledTargets.quick_summary) {
       sectionsToExpand.push({
         section: 'quick_summary',
         currentWords: words,
         targetWords: scaledTargets.quick_summary,
-        content: summary.quick_summary,
+        content: structured.quick_summary,
       });
     }
   }
   
   // Check key_ideas
-  if (summary.key_ideas && Array.isArray(summary.key_ideas)) {
-    summary.key_ideas.forEach((idea: any, index: number) => {
+  if (structured.key_ideas && Array.isArray(structured.key_ideas)) {
+    structured.key_ideas.forEach((idea: any, index: number) => {
       if (idea.text && typeof idea.text === 'string') {
-        const words = idea.text.split(/\s+/).filter(word => word.length > 0).length;
+        const words = idea.text
+          .split(/\s+/)
+          .filter((word: string) => word.length > 0).length;
         if (words < scaledTargets.key_ideas) {
           sectionsToExpand.push({
             section: 'key_ideas',
@@ -186,10 +196,12 @@ function identifySectionsNeedingExpansion(summary: SummaryPayload, targetWordCou
   }
   
   // Check chapters
-  if (summary.chapters && Array.isArray(summary.chapters)) {
-    summary.chapters.forEach((chapter: any, index: number) => {
+  if (structured.chapters && Array.isArray(structured.chapters)) {
+    structured.chapters.forEach((chapter: any, index: number) => {
       if (chapter.summary && typeof chapter.summary === 'string') {
-        const words = chapter.summary.split(/\s+/).filter(word => word.length > 0).length;
+        const words = chapter.summary
+          .split(/\s+/)
+          .filter((word: string) => word.length > 0).length;
         if (words < scaledTargets.chapters) {
           sectionsToExpand.push({
             section: 'chapters',
@@ -204,10 +216,12 @@ function identifySectionsNeedingExpansion(summary: SummaryPayload, targetWordCou
   }
   
   // Check actionable_insights
-  if (summary.actionable_insights && Array.isArray(summary.actionable_insights)) {
-    summary.actionable_insights.forEach((insight: any, index: number) => {
+  if (structured.actionable_insights && Array.isArray(structured.actionable_insights)) {
+    structured.actionable_insights.forEach((insight: any, index: number) => {
       if (typeof insight === 'string') {
-        const words = insight.split(/\s+/).filter(word => word.length > 0).length;
+        const words = insight
+          .split(/\s+/)
+          .filter((word: string) => word.length > 0).length;
         if (words < scaledTargets.actionable_insights) {
           sectionsToExpand.push({
             section: 'actionable_insights',
@@ -222,10 +236,12 @@ function identifySectionsNeedingExpansion(summary: SummaryPayload, targetWordCou
   }
   
   // Check quotes
-  if (summary.quotes && Array.isArray(summary.quotes)) {
-    summary.quotes.forEach((quote: any, index: number) => {
+  if (structured.quotes && Array.isArray(structured.quotes)) {
+    structured.quotes.forEach((quote: any, index: number) => {
       if (typeof quote === 'string') {
-        const words = quote.split(/\s+/).filter(word => word.length > 0).length;
+        const words = quote
+          .split(/\s+/)
+          .filter((word: string) => word.length > 0).length;
         if (words < scaledTargets.quotes) {
           sectionsToExpand.push({
             section: 'quotes',
@@ -265,6 +281,13 @@ async function expandSection(
   model?: string,
 ): Promise<SummaryPayload> {
   const selectedModel = model || DEFAULT_MODEL;
+
+  // Section-by-section expansion is only supported for structured summaries.
+  if (!isStructuredSummary(summary)) {
+    return summary;
+  }
+
+  const structured = summary;
   
   let expansionPrompt = '';
   let sectionDescription = '';
@@ -277,13 +300,13 @@ async function expandSection(
 Add more detail, examples, case studies, and comprehensive analysis. Expand on key concepts, provide more context, and include additional real-world applications.`;
       break;
     case 'key_ideas':
-      sectionDescription = `key idea "${(summary.key_ideas as any[])[sectionToExpand.itemIndex!]?.title || `idea ${sectionToExpand.itemIndex! + 1}`}"`;
+      sectionDescription = `key idea "${structured.key_ideas[sectionToExpand.itemIndex!]?.title || `idea ${sectionToExpand.itemIndex! + 1}`}"`;
       expansionPrompt = `Expand this key idea. Current length: ${sectionToExpand.currentWords} words. Target: ${sectionToExpand.targetWords} words minimum.
 
 Add more detail, 5-7 real-world examples, detailed case studies, step-by-step implementation guides, common pitfalls, troubleshooting tips, and how this connects to other ideas in the book.`;
       break;
     case 'chapters':
-      sectionDescription = `chapter "${(summary.chapters as any[])[sectionToExpand.itemIndex!]?.title || `chapter ${sectionToExpand.itemIndex! + 1}`}"`;
+      sectionDescription = `chapter "${structured.chapters[sectionToExpand.itemIndex!]?.title || `chapter ${sectionToExpand.itemIndex! + 1}`}"`;
       expansionPrompt = `Expand this chapter summary. Current length: ${sectionToExpand.currentWords} words. Target: ${sectionToExpand.targetWords} words minimum.
 
 Add more detail, extensive examples, key quotes with extensive context (200-300 words per quote), implementation strategies, related concepts, practical applications, case studies, and thorough coverage.`;
@@ -641,7 +664,9 @@ CRITICAL: Return your expanded summary as continuous, flowing prose. Do NOT retu
       }
 
       const expandedText = content.trim();
-      const finalWordCount = expandedText.split(/\s+/).filter(word => word.length > 0).length;
+      const finalWordCount = expandedText
+        .split(/\s+/)
+        .filter((word: string) => word.length > 0).length;
       
       console.log(`[OpenRouter] Expansion complete. Final word count: ${finalWordCount} words (${finalWordCount - currentWordCount} words added)`);
       

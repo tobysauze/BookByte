@@ -43,13 +43,8 @@ export function EditableSummaryContent({
   
   const [isUpdating, setIsUpdating] = useState(false);
   const { highlights, refreshHighlights } = useHighlights(book.id);
-
-  // Ensure summary is structured
-  if (!isStructuredSummary(book.summary)) {
-    return <div>Summary must be in structured format</div>;
-  }
   
-  const summary = book.summary;
+  const summary = book.summary as z.infer<typeof summarySchema>;
 
   const handleSaveSection = async (section: string, data: any) => {
     setIsUpdating(true);

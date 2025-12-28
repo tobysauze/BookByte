@@ -1,4 +1,11 @@
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
+
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
 
 export type GapType = 
   | "missing_chapter"
@@ -46,6 +53,18 @@ export function detectGaps(
 
   // Extract book structure
   const bookStructure = extractBookStructure(bookText, bookTitle);
+  
+  // Ensure summary is structured
+  if (!isStructuredSummary(currentSummary)) {
+    // For raw text summaries, return empty gap report
+    return {
+      totalGaps: 0,
+      gapsBySeverity: { high: 0, medium: 0, low: 0 },
+      gaps: [],
+      recommendations: ["Summary is in raw text format. Gap detection requires structured format."],
+      estimatedEnhancementTime: 0,
+    };
+  }
   
   // Check for missing or shallow chapters
   const chapterGaps = detectChapterGaps(

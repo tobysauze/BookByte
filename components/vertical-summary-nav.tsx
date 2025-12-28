@@ -49,6 +49,11 @@ const sectionIcons: Record<SummarySectionKey, LucideIcon> = {
   ai_provider: BookOpen,
 };
 
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
+
 export function VerticalSummaryNav({
   summary,
   activeTab,
@@ -57,6 +62,13 @@ export function VerticalSummaryNav({
   isGenerating,
   onContentsClick,
 }: VerticalSummaryNavProps) {
+  // Ensure summary is structured
+  if (!isStructuredSummary(summary)) {
+    return null; // Don't show nav for raw text summaries
+  }
+  
+  const structuredSummary = summary;
+  
   return (
     <div className="sticky left-0 top-24 z-40 h-[calc(100vh-6rem)] w-36 border-r border-[rgb(var(--border))] bg-[rgb(var(--background))] overflow-y-auto">
       <div className="p-3 space-y-2">
@@ -82,10 +94,10 @@ export function VerticalSummaryNav({
             
             // Get count for each section
             let count = 0;
-            if (section === "key_ideas") count = summary.key_ideas.length;
-            else if (section === "chapters") count = summary.chapters.length;
-            else if (section === "actionable_insights") count = summary.actionable_insights.length;
-            else if (section === "quotes") count = summary.quotes.length;
+            if (section === "key_ideas") count = structuredSummary.key_ideas.length;
+            else if (section === "chapters") count = structuredSummary.chapters.length;
+            else if (section === "actionable_insights") count = structuredSummary.actionable_insights.length;
+            else if (section === "quotes") count = structuredSummary.quotes.length;
 
             return (
               <Button

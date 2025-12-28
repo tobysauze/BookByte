@@ -9,6 +9,11 @@ import { summarySchema } from "@/lib/schemas";
 // Only use structured summary keys (not raw_text variant)
 type SummarySectionKey = keyof z.infer<typeof summarySchema>;
 
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
+
 type UniversalPaginationProps = {
   summary?: SummaryPayload;
   currentSection?: SummarySectionKey;
@@ -34,6 +39,11 @@ export function UniversalPagination({
   const getTotalItemsFromSummary = () => {
     if (!summary) return totalItems;
     
+    // Ensure summary is structured
+    if (!isStructuredSummary(summary)) {
+      return totalItems || 0;
+    }
+    
     return (
       1 + // Quick Summary
       (summary.key_ideas?.length || 0) +
@@ -49,6 +59,13 @@ export function UniversalPagination({
   // Calculate current page and total pages
   const getCurrentPageInfo = () => {
     if (!summary || !currentSection) {
+      const page = Math.floor(currentItemIndex / ITEMS_PER_PAGE) + 1;
+      const totalPages = Math.ceil((totalItems || 1) / ITEMS_PER_PAGE);
+      return { currentPage: page, totalPages };
+    }
+    
+    // Ensure summary is structured
+    if (!isStructuredSummary(summary)) {
       const page = Math.floor(currentItemIndex / ITEMS_PER_PAGE) + 1;
       const totalPages = Math.ceil((totalItems || 1) / ITEMS_PER_PAGE);
       return { currentPage: page, totalPages };

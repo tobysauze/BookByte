@@ -5,7 +5,14 @@ import { Download, Loader2 } from "lucide-react";
 import jsPDF from "jspdf";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
+import { summarySchema } from "@/lib/schemas";
+
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
 
 type DownloadPdfButtonProps = {
   bookTitle: string;
@@ -24,6 +31,15 @@ export function DownloadPdfButton({
     setIsGenerating(true);
     
     try {
+      // Ensure summary is structured
+      if (!isStructuredSummary(summary)) {
+        toast.error("Cannot generate PDF for raw text summaries");
+        setIsGenerating(false);
+        return;
+      }
+      
+      const structuredSummary = summary;
+      
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -110,22 +126,22 @@ export function DownloadPdfButton({
       yPosition = margin;
 
       // Quick Summary
-      if (summary.quick_summary) {
+      if (structuredSummary.quick_summary) {
         addText("QUICK SUMMARY", 18, true, 'center');
         checkNewPage(10);
         yPosition += 5;
-        addText(summary.quick_summary, 12, false, 'left');
+        addText(structuredSummary.quick_summary, 12, false, 'left');
         checkNewPage(20);
         yPosition += 10;
       }
 
       // Key Ideas
-      if (summary.key_ideas && summary.key_ideas.length > 0) {
+      if (structuredSummary.key_ideas && structuredSummary.key_ideas.length > 0) {
         addText("KEY IDEAS", 18, true, 'center');
         checkNewPage(10);
         yPosition += 5;
         
-        summary.key_ideas.forEach((idea, index) => {
+        structuredSummary.key_ideas.forEach((idea, index) => {
           checkNewPage(30);
           addText(`${index + 1}. ${idea.title}`, 14, true);
           checkNewPage(10);
@@ -137,12 +153,12 @@ export function DownloadPdfButton({
       }
 
       // Chapters
-      if (summary.chapters && summary.chapters.length > 0) {
+      if (structuredSummary.chapters && structuredSummary.chapters.length > 0) {
         addText("CHAPTER SUMMARIES", 18, true, 'center');
         checkNewPage(10);
         yPosition += 5;
         
-        summary.chapters.forEach((chapter, index) => {
+        structuredSummary.chapters.forEach((chapter, index) => {
           checkNewPage(30);
           addText(`Chapter ${index + 1}: ${chapter.title}`, 14, true);
           checkNewPage(10);
@@ -156,12 +172,12 @@ export function DownloadPdfButton({
       }
 
       // Actionable Insights
-      if (summary.actionable_insights && summary.actionable_insights.length > 0) {
+      if (structuredSummary.actionable_insights && structuredSummary.actionable_insights.length > 0) {
         addText("ACTIONABLE INSIGHTS", 18, true, 'center');
         checkNewPage(10);
         yPosition += 5;
         
-        summary.actionable_insights.forEach((insight, index) => {
+        structuredSummary.actionable_insights.forEach((insight, index) => {
           checkNewPage(20);
           addText(`${index + 1}. ${insight}`, 11, false);
           checkNewPage(10);
@@ -170,12 +186,12 @@ export function DownloadPdfButton({
       }
 
       // Quotes
-      if (summary.quotes && summary.quotes.length > 0) {
+      if (structuredSummary.quotes && structuredSummary.quotes.length > 0) {
         addText("QUOTES", 18, true, 'center');
         checkNewPage(10);
         yPosition += 5;
         
-        summary.quotes.forEach((quote, index) => {
+        structuredSummary.quotes.forEach((quote, index) => {
           checkNewPage(20);
           addText(`"${quote}"`, 11, false, 'center');
           checkNewPage(10);

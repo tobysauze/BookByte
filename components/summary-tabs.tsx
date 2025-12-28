@@ -38,6 +38,11 @@ const sectionLabels: Record<SummarySectionKey, string> = {
 
 const EMPTY_AUDIO_MAP = {};
 
+// Type guard for structured summaries
+function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
+  return summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+}
+
 export function SummaryContent({
   summary,
   activeTab,
@@ -89,10 +94,17 @@ export function SummaryContent({
       );
     }
 
+    // Ensure summary is structured
+    if (!isStructuredSummary(summary)) {
+      return <div>Summary must be in structured format</div>;
+    }
+    
+    const structuredSummary = summary;
+
     // Structured format rendering
     switch (activeTab) {
       case "quick_summary":
-        if (!summary.quick_summary || typeof summary.quick_summary !== 'string') {
+        if (!structuredSummary.quick_summary || typeof structuredSummary.quick_summary !== 'string') {
           return (
             <section className="space-y-8">
               <div className="text-center">
@@ -124,7 +136,7 @@ export function SummaryContent({
         );
 
       case "key_ideas":
-        if (!summary.key_ideas || !Array.isArray(summary.key_ideas)) {
+        if (!structuredSummary.key_ideas || !Array.isArray(structuredSummary.key_ideas)) {
           return (
             <section className="space-y-8">
               <div className="text-center">
@@ -138,7 +150,7 @@ export function SummaryContent({
             </section>
           );
         }
-        const currentIdea = summary.key_ideas[currentItemIndex];
+        const currentIdea = structuredSummary.key_ideas[currentItemIndex];
         if (!currentIdea) {
           return (
             <section className="space-y-8">
@@ -179,7 +191,7 @@ export function SummaryContent({
         );
 
       case "chapters":
-        if (!summary.chapters || !Array.isArray(summary.chapters)) {
+        if (!structuredSummary.chapters || !Array.isArray(structuredSummary.chapters)) {
           return (
             <section className="space-y-8">
               <div className="text-center">
@@ -193,11 +205,11 @@ export function SummaryContent({
             </section>
           );
         }
-        console.log('Rendering chapters - currentItemIndex:', currentItemIndex, 'chapters length:', summary.chapters.length);
-        const currentChapter = summary.chapters[currentItemIndex];
+        console.log('Rendering chapters - currentItemIndex:', currentItemIndex, 'chapters length:', structuredSummary.chapters.length);
+        const currentChapter = structuredSummary.chapters[currentItemIndex];
         console.log('Current chapter:', currentChapter);
         console.log('Chapter keys:', currentChapter ? Object.keys(currentChapter) : 'undefined');
-        console.log('Chapter content:', currentChapter?.content);
+        console.log('Chapter summary:', currentChapter?.summary);
         
         if (!currentChapter) {
           // If no chapter at this index, show a message or return to first chapter
@@ -216,7 +228,7 @@ export function SummaryContent({
         }
         
         // Check if chapter has content property - try different possible property names
-        const chapterContent = currentChapter.content || currentChapter.text || currentChapter.summary || currentChapter.body;
+        const chapterContent = (currentChapter as Record<string, unknown>).content || currentChapter.summary || (currentChapter as Record<string, unknown>).text || (currentChapter as Record<string, unknown>).body;
         if (!chapterContent || typeof chapterContent !== 'string') {
           console.log('Chapter exists but no valid content property found. Available keys:', Object.keys(currentChapter));
           console.log('Content type:', typeof chapterContent, 'Content value:', chapterContent);
@@ -259,7 +271,7 @@ export function SummaryContent({
         );
 
       case "actionable_insights":
-        if (!summary.actionable_insights || !Array.isArray(summary.actionable_insights)) {
+        if (!structuredSummary.actionable_insights || !Array.isArray(structuredSummary.actionable_insights)) {
           return (
             <section className="space-y-8">
               <div className="text-center">
@@ -273,7 +285,7 @@ export function SummaryContent({
             </section>
           );
         }
-        const currentInsight = summary.actionable_insights[currentItemIndex];
+        const currentInsight = structuredSummary.actionable_insights[currentItemIndex];
         if (!currentInsight) {
           return (
             <section className="space-y-8">
@@ -313,7 +325,7 @@ export function SummaryContent({
         );
 
       case "quotes":
-        if (!summary.quotes || !Array.isArray(summary.quotes)) {
+        if (!structuredSummary.quotes || !Array.isArray(structuredSummary.quotes)) {
           return (
             <section className="space-y-8">
               <div className="text-center">
@@ -327,7 +339,7 @@ export function SummaryContent({
             </section>
           );
         }
-        const currentQuote = summary.quotes[currentItemIndex];
+        const currentQuote = structuredSummary.quotes[currentItemIndex];
         if (!currentQuote) {
           return (
             <section className="space-y-8">

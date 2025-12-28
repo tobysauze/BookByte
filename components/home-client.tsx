@@ -310,7 +310,7 @@ export function HomeClient({ initialUserEmail }: HomeClientProps) {
 
 
           <SummaryProviderPanel
-            provider={summary.ai_provider || "AI Summary"}
+            provider={(summary.ai_provider as string | undefined) || "AI Summary"}
             summary={summary}
             description="Generated summary stored in your library"
           />
@@ -385,8 +385,13 @@ function SummaryProviderPanel({ provider, summary, description }: SummaryProvide
       </div>
       <div className="overflow-hidden">
         <SummaryContent 
-          summary={summary} 
+          summary={summary}
           activeTab="quick_summary"
+          currentItemIndex={0}
+          onSectionChange={() => {}}
+          onItemChange={() => {}}
+          onPrevious={() => {}}
+          onNext={() => {}}
           audioUrlBySection={{}}
         />
       </div>
