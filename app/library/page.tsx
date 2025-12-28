@@ -42,7 +42,7 @@ export default async function LibraryPage() {
       .select("id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    
+
     books = (data ?? []) as SupabaseSummary[];
     error = editorError;
   } else {
@@ -79,23 +79,23 @@ export default async function LibraryPage() {
 
     // Combine both lists, removing duplicates (in case they saved their own book)
     const bookMap = new Map<string, SupabaseSummary>();
-    
+
     // Add own books first
     ownBooks.forEach(book => {
       bookMap.set(book.id, book);
     });
-    
+
     // Add saved books (won't overwrite if already exists)
     savedBooks.forEach(book => {
       if (!bookMap.has(book.id)) {
         bookMap.set(book.id, book);
       }
     });
-    
-    books = Array.from(bookMap.values()).sort((a, b) => 
+
+    books = Array.from(bookMap.values()).sort((a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-    
+
     if (ownBooksResult.error) {
       error = ownBooksResult.error;
     } else if (savedBooksResult.error) {
@@ -106,28 +106,28 @@ export default async function LibraryPage() {
   // For regular users, also fetch read and favorite status
   let readBooks: Set<string> = new Set();
   let favoriteBooks: Set<string> = new Set();
-  
+
   if (userRole === "regular" && books.length > 0) {
     const bookIds = books.map(book => book.id);
-    
+
     // Check which books are marked as read
     const { data: readData } = await supabase
       .from("user_read_books")
       .select("book_id")
       .eq("user_id", user.id)
       .in("book_id", bookIds);
-    
+
     if (readData) {
       readBooks = new Set(readData.map(item => item.book_id));
     }
-    
+
     // Check which books are favorited
     const { data: favoriteData } = await supabase
       .from("user_favorites")
       .select("book_id")
       .eq("user_id", user.id)
       .in("book_id", bookIds);
-    
+
     if (favoriteData) {
       favoriteBooks = new Set(favoriteData.map(item => item.book_id));
     }
@@ -150,7 +150,7 @@ export default async function LibraryPage() {
               {userRole === "editor" ? "My Books" : "My Library"}
             </h1>
             <p className="max-w-2xl text-sm text-[rgb(var(--muted-foreground))]">
-              {userRole === "editor" 
+              {userRole === "editor"
                 ? "Manage your book summaries, edit titles, upload covers, and control visibility."
                 : "Your created summaries and books you've saved from the community."
               }
@@ -166,7 +166,7 @@ export default async function LibraryPage() {
               </Button>
             ) : (
               <Button asChild variant="outline">
-                <Link href="/" className="flex items-center gap-2">
+                <Link href="/create-book" className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
                   Add Summary
                 </Link>
@@ -177,7 +177,7 @@ export default async function LibraryPage() {
       </header>
 
       {books.length ? (
-        <BookGrid 
+        <BookGrid
           books={books.map(book => ({
             ...book,
             isRead: userRole === "regular" ? readBooks.has(book.id) : false,
@@ -189,7 +189,7 @@ export default async function LibraryPage() {
         />
       ) : (
         <div className="rounded-3xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card))] p-12 text-center text-sm text-[rgb(var(--muted-foreground))]">
-          {userRole === "editor" 
+          {userRole === "editor"
             ? "No books yet. Upload your first book from the home page to get started."
             : "No books yet. Create your first summary from the home page or browse the Discover page to find books to save."
           }

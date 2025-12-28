@@ -22,14 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user is an editor
-    const userRole = await getUserRole();
-    if (userRole !== "editor") {
-      return NextResponse.json(
-        { error: "Only editors can create blank books." },
-        { status: 403 },
-      );
-    }
+
 
     const body = await request.json();
     const { title, author } = body;
@@ -87,14 +80,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user is an editor (double check)
-    const { data: userProfile } = await supabase
-      .from("user_profiles")
-      .select("is_editor")
-      .eq("id", user.id)
-      .single();
 
-    const isEditor = userProfile?.is_editor ?? false;
 
     const { data, error } = await supabase
       .from("books")
@@ -107,8 +93,8 @@ export async function POST(request: NextRequest) {
         local_file_path: null,
         audio_urls: {},
         progress_percent: 0,
-        is_public: false, // Start as private, editors can make public later
-        is_editor_created: true,
+        is_public: false, // Start as private
+        is_editor_created: (await getUserRole()) === "editor",
       })
       .select("id, title, author")
       .single();

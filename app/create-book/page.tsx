@@ -14,42 +14,28 @@ export default function CreateBookPage() {
   const [author, setAuthor] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const [isEditor, setIsEditor] = useState(false);
+
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
-  // Check if user is an editor
+  // Check if user is logged in
   useEffect(() => {
-    const checkEditorStatus = async () => {
+    const checkUser = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        
+
         if (!user) {
           router.push("/login");
           return;
         }
 
-        const { data: profile } = await supabase
-          .from("user_profiles")
-          .select("is_editor")
-          .eq("id", user.id)
-          .single();
-
-        if (!profile?.is_editor) {
-          toast.error("Only editors can create books");
-          router.push("/discover");
-          return;
-        }
-
-        setIsEditor(true);
-      } catch (error) {
-        console.error("Error checking editor status:", error);
-        router.push("/discover");
-      } finally {
         setIsChecking(false);
+      } catch (error) {
+        console.error("Error checking user:", error);
+        router.push("/login"); // Redirect to login on error
       }
     };
 
-    checkEditorStatus();
+    checkUser();
   }, [router, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,9 +84,7 @@ export default function CreateBookPage() {
     );
   }
 
-  if (!isEditor) {
-    return null;
-  }
+
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 px-4 py-16 sm:px-6 lg:px-8">
