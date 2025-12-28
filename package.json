@@ -1,6 +1,6 @@
 {
   "name": "bookbyte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +8,6 @@
     "start": "next start",
     "lint": "eslint"
   },
-  "version": "0.1.1",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -25,7 +24,7 @@
     "jspdf": "^3.0.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.462.0",
-    "next": "16.0.1",
+    "next": "^16.0.10",
     "openai": "^4.55.6",
     "pdf-parse": "^1.1.1",
     "react": "19.2.0",
@@ -41,7 +40,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.0.1",
+    "eslint-config-next": "^16.0.10",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
