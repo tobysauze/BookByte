@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,28 @@ export default function ResetPasswordPage() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Handle PCKE code exchange if present in URL
+    useEffect(() => {
+        const exchangeCode = async () => {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get("code");
+
+            if (code) {
+                // Exchange the code for a session
+                const { error } = await supabase.auth.exchangeCodeForSession(code);
+                if (error) {
+                    console.error("Error exchanging code:", error);
+                    setError(error.message);
+                }
+
+                // Clear the code from the URL so we don't try to use it again
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        };
+
+        exchangeCode();
+    }, [supabase]);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
