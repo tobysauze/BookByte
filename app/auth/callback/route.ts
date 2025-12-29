@@ -1,18 +1,28 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 
-import { createSupabaseServerClient } from "@/lib/supabase";
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // if "next" is in param, use it as the redirect URL
   const next = searchParams.get("next") ?? "/library";
 
   if (code) {
-    const supabase = await createSupabaseServerClient();
+    // Create client that can set cookies on the 'response' object
+    const { supabase, response } = createSupabaseRouteHandlerClient(request);
+
+    // Exchange code for session. This updates the 'response' cookies.
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      // Create the redirect response
+      const redirectResponse = NextResponse.redirect(`${origin}${next}`);
+
+      // Copy the cookies from our temporary 'response' to the actual redirect response
+      response.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie);
+      });
+
+      return redirectResponse;
     }
   }
 
