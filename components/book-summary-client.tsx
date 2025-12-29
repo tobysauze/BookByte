@@ -36,12 +36,17 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
   const [audioMap, setAudioMap] = useState<Record<string, string>>(
     (book.audio_urls ?? {}) as Record<string, string>,
   );
-  
+
   // Ensure summary is structured (should always be for book display)
   if (!isStructuredSummary(book.summary)) {
-    throw new Error("Book summary must be in structured format");
+    return (
+      <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-8 text-center text-[rgb(var(--muted-foreground))]">
+        <p>This book summary is not available in the structured format.</p>
+        <p className="text-xs mt-2">ID: {book.id}</p>
+      </div>
+    );
   }
-  
+
   const structuredSummary = book.summary as z.infer<typeof summarySchema>;
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +64,7 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
     const section = searchParams.get("section");
     const itemIndex = searchParams.get("itemIndex");
     const highlightId = searchParams.get("highlightId");
-    
+
     if (section && ["quick_summary", "key_ideas", "chapters", "actionable_insights", "quotes"].includes(section)) {
       setActiveTab(section as SummarySectionKey);
       if (itemIndex) {
@@ -88,13 +93,13 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
         const originalBg = highlightElement.style.backgroundColor;
         highlightElement.style.backgroundColor = "rgb(250 204 21)"; // Bright yellow
         highlightElement.style.transition = "background-color 2s ease";
-        
-        highlightElement.scrollIntoView({ 
-          behavior: "smooth", 
+
+        highlightElement.scrollIntoView({
+          behavior: "smooth",
           block: "center",
           inline: "nearest"
         });
-        
+
         // Remove flash animation and restore original color after a delay
         setTimeout(() => {
           highlightElement.style.backgroundColor = originalBg || "";
@@ -102,12 +107,12 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
             highlightElement.style.transition = "";
           }, 2000);
         }, 2000);
-        
+
         // Clean up URL parameter after scrolling
         const url = new URL(window.location.href);
         url.searchParams.delete("highlightId");
         window.history.replaceState({}, "", url.toString());
-        
+
         return true; // Successfully scrolled
       }
       return false; // Element not found yet
@@ -120,7 +125,7 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
         timeouts.forEach(clearTimeout);
         return;
       }
-      
+
       attempts++;
       if (attempts < maxAttempts) {
         const timeoutId = setTimeout(() => {
@@ -132,7 +137,7 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
 
     // Start trying immediately
     tryScroll();
-    
+
     return () => {
       // Clean up all timeouts on unmount or dependency change
       timeouts.forEach(clearTimeout);
@@ -187,7 +192,7 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
 
   const handlePrevious = () => {
     const currentSectionItems = getSectionItems(activeTab);
-    
+
     if (activeTab === "quick_summary") {
       // Go to last page of previous section
       if (structuredSummary.quotes.length > 0) {
@@ -210,7 +215,7 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
     } else {
       // Calculate current page
       const currentPage = Math.floor(currentItemIndex / ITEMS_PER_PAGE);
-      
+
       if (currentPage > 0) {
         // Go to previous page
         setCurrentItemIndex((currentPage - 1) * ITEMS_PER_PAGE);
@@ -235,7 +240,7 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
 
   const handleNext = () => {
     const currentSectionItems = getSectionItems(activeTab);
-    
+
     // If current section has no items, skip to next section
     if (currentSectionItems.length === 0) {
       const sectionOrder: SummarySectionKey[] = ["quick_summary", "key_ideas", "chapters", "actionable_insights", "quotes"];
@@ -247,12 +252,12 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
       }
       return;
     }
-    
+
     // Calculate current page and next page
     const currentPage = Math.floor(currentItemIndex / ITEMS_PER_PAGE);
     const totalPages = Math.ceil(currentSectionItems.length / ITEMS_PER_PAGE);
     const nextPageIndex = (currentPage + 1) * ITEMS_PER_PAGE;
-    
+
     if (nextPageIndex < currentSectionItems.length) {
       // Go to next page in same section
       setCurrentItemIndex(nextPageIndex);
@@ -301,42 +306,40 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
     <div className="space-y-6">
       {/* Action Buttons */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <TextSettings />
-            {/* View Mode Toggle */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))]">
-              <button
-                onClick={() => handleViewModeToggle(false)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-                  !isContinuousScroll
-                    ? 'bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]'
-                    : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
+        <div className="flex items-center gap-4">
+          <TextSettings />
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))]">
+            <button
+              onClick={() => handleViewModeToggle(false)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${!isContinuousScroll
+                ? 'bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]'
+                : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
                 }`}
-              >
-                <BookOpen className="h-4 w-4" />
-                <span>Paginated</span>
-              </button>
-              <button
-                onClick={() => handleViewModeToggle(true)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-                  isContinuousScroll
-                    ? 'bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]'
-                    : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
+            >
+              <BookOpen className="h-4 w-4" />
+              <span>Paginated</span>
+            </button>
+            <button
+              onClick={() => handleViewModeToggle(true)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${isContinuousScroll
+                ? 'bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]'
+                : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
                 }`}
-              >
-                <Scroll className="h-4 w-4" />
-                <span>Continuous Scroll</span>
-              </button>
-            </div>
+            >
+              <Scroll className="h-4 w-4" />
+              <span>Continuous Scroll</span>
+            </button>
           </div>
-          {book.file_url ? (
-            <Button asChild variant="secondary" size="sm">
-              <a href={book.file_url} target="_blank" rel="noopener noreferrer">
-                Download source file
-              </a>
-            </Button>
-          ) : null}
         </div>
+        {book.file_url ? (
+          <Button asChild variant="secondary" size="sm">
+            <a href={book.file_url} target="_blank" rel="noopener noreferrer">
+              Download source file
+            </a>
+          </Button>
+        ) : null}
+      </div>
 
       {/* Error Message */}
       {error ? (
@@ -347,50 +350,50 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
 
       {/* Summary Section with Sidebar */}
       <>
-          <div className="flex">
-            {/* Vertical Navigation Sidebar */}
-            <VerticalSummaryNav
-              summary={book.summary}
-              activeTab={activeTab}
-              onTabChange={handleSectionChange}
-              onGenerateAudio={handleGenerateAudio}
-              isGenerating={isGenerating}
-              onContentsClick={() => setIsContentsOpen(true)}
-            />
-
-            {/* Main Summary Content */}
-            <div className="flex-1 pl-2">
-              {isContinuousScroll ? (
-                <ContinuousScrollView
-                  book={book}
-                  canEdit={canEdit}
-                />
-              ) : (
-                <EditableSummaryContent
-                  book={book}
-                  activeTab={activeTab as string}
-                  currentItemIndex={currentItemIndex}
-                  onSectionChange={handleSectionChange as (section: string) => void}
-                  onItemChange={handleItemChange}
-                  onPrevious={handlePrevious}
-                  onNext={handleNext}
-                  canEdit={canEdit}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Contents Menu - Only show if not raw text */}
-          <ContentsMenu
+        <div className="flex">
+          {/* Vertical Navigation Sidebar */}
+          <VerticalSummaryNav
             summary={book.summary}
-            currentSection={activeTab}
-            currentItemIndex={currentItemIndex}
-            onSectionChange={handleSectionChange}
-            onItemChange={handleItemChange}
-            onClose={() => setIsContentsOpen(false)}
-            isOpen={isContentsOpen}
+            activeTab={activeTab}
+            onTabChange={handleSectionChange}
+            onGenerateAudio={handleGenerateAudio}
+            isGenerating={isGenerating}
+            onContentsClick={() => setIsContentsOpen(true)}
           />
-        </>
+
+          {/* Main Summary Content */}
+          <div className="flex-1 pl-2">
+            {isContinuousScroll ? (
+              <ContinuousScrollView
+                book={book}
+                canEdit={canEdit}
+              />
+            ) : (
+              <EditableSummaryContent
+                book={book}
+                activeTab={activeTab as string}
+                currentItemIndex={currentItemIndex}
+                onSectionChange={handleSectionChange as (section: string) => void}
+                onItemChange={handleItemChange}
+                onPrevious={handlePrevious}
+                onNext={handleNext}
+                canEdit={canEdit}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Contents Menu - Only show if not raw text */}
+        <ContentsMenu
+          summary={book.summary}
+          currentSection={activeTab}
+          currentItemIndex={currentItemIndex}
+          onSectionChange={handleSectionChange}
+          onItemChange={handleItemChange}
+          onClose={() => setIsContentsOpen(false)}
+          isOpen={isContentsOpen}
+        />
+      </>
     </div>
   );
 }
