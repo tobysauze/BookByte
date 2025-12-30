@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { EditableTitle } from "@/components/editable-title";
 import { SaveToLibraryButton } from "@/components/save-to-library-button";
@@ -10,6 +11,20 @@ import { CoverUpload } from "@/components/cover-upload";
 import { DownloadPdfButton } from "@/components/download-pdf-button";
 import { UploadSummaryButton } from "@/components/upload-summary-button";
 import { UploadChaptersButton } from "@/components/upload-chapters-button";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { SupabaseSummary } from "@/lib/supabase";
 import type { SummaryPayload } from "@/lib/schemas";
 
@@ -27,10 +42,10 @@ type BookHeroClientProps = {
 // Count words in a summary
 function countSummaryWords(summary: SummaryPayload): number {
   let wordCount = 0;
-  
+
   // Check if summary is structured format
   const isStructured = summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
-  
+
   if (!isStructured) {
     // For raw text summaries, count words in raw_text
     if ('raw_text' in summary && typeof (summary as { raw_text: string }).raw_text === 'string') {
@@ -38,14 +53,14 @@ function countSummaryWords(summary: SummaryPayload): number {
     }
     return 0;
   }
-  
+
   const structured = summary as { quick_summary?: string; key_ideas?: Array<{ title?: string; text?: string }>; chapters?: Array<{ title?: string; summary?: string }>; actionable_insights?: string[]; quotes?: string[] };
-  
+
   // Count words in quick_summary
   if (structured.quick_summary) {
     wordCount += structured.quick_summary.split(/\s+/).filter(word => word.length > 0).length;
   }
-  
+
   // Count words in key_ideas (title + text)
   if (structured.key_ideas) {
     structured.key_ideas.forEach(idea => {
@@ -57,7 +72,7 @@ function countSummaryWords(summary: SummaryPayload): number {
       }
     });
   }
-  
+
   // Count words in chapters (title + summary)
   if (structured.chapters) {
     structured.chapters.forEach(chapter => {
@@ -69,7 +84,7 @@ function countSummaryWords(summary: SummaryPayload): number {
       }
     });
   }
-  
+
   // Count words in actionable_insights
   if (structured.actionable_insights) {
     structured.actionable_insights.forEach(insight => {
@@ -78,7 +93,7 @@ function countSummaryWords(summary: SummaryPayload): number {
       }
     });
   }
-  
+
   // Count words in quotes
   if (structured.quotes) {
     structured.quotes.forEach(quote => {
@@ -87,7 +102,7 @@ function countSummaryWords(summary: SummaryPayload): number {
       }
     });
   }
-  
+
   return wordCount;
 }
 
@@ -104,6 +119,28 @@ export function BookHeroClient({
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(initialIsSavedToLibrary);
   const [isRead, setIsRead] = useState(initialIsRead);
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited);
+  const router = useRouter();
+
+  const handleDelete = async () => {
+    try {
+      const response = await fetch(`/api/books/${book.id}/delete`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete book");
+      }
+
+      const result = await response.json();
+
+      toast.success("Book deleted successfully");
+      router.push("/library");
+      router.refresh();
+    } catch (error) {
+      console.error("Error deleting book:", error);
+      toast.error("Failed to delete book");
+    }
+  };
 
   const handleRemoveFromLibrary = () => {
     setIsSavedToLibrary(false);
@@ -137,7 +174,7 @@ export function BookHeroClient({
           <span className="h-2 w-2 rounded-full bg-[rgb(var(--accent))]" />
           Book summary
         </div>
-        <EditableTitle 
+        <EditableTitle
           bookId={book.id}
           initialTitle={book.title}
           isEditable={canEdit}
@@ -160,7 +197,7 @@ export function BookHeroClient({
             {countSummaryWords(book.summary).toLocaleString()} words
           </span>
         </div>
-        
+
         {/* Download PDF button - available to all users */}
         <div className="pt-2">
           <DownloadPdfButton
@@ -169,7 +206,7 @@ export function BookHeroClient({
             summary={book.summary}
           />
         </div>
-        
+
         {/* Editor controls */}
         {userRole === "editor" && canEdit && (
           <div className="space-y-4 pt-2">
@@ -178,17 +215,17 @@ export function BookHeroClient({
               <UploadChaptersButton bookId={book.id} />
             </div>
             <VisibilityToggle bookId={book.id} initialIsPublic={book.is_public} />
-            <CoverUpload 
-              bookId={book.id} 
+            <CoverUpload
+              bookId={book.id}
               currentCoverUrl={book.cover_url}
             />
           </div>
         )}
-        
+
         {/* Regular user controls */}
         {userRole === "regular" && book.is_public && (
           <div className="space-y-4 pt-2">
-            <SaveToLibraryButton 
+            <SaveToLibraryButton
               bookId={book.id}
               isSaved={isSavedToLibrary}
             />
@@ -206,7 +243,39 @@ export function BookHeroClient({
           </div>
         )}
       </div>
-    </section>
+        )}
+
+      {/* Delete button (Owner or Editor) */}
+      {canDelete && (
+        <div className="pt-4 border-t border-[rgb(var(--border))] mt-4">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" className="w-full sm:w-auto">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Book
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the book
+                  "{book.title}" and remove all data from our servers.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
+
+    </div>
+    </section >
   );
 }
 

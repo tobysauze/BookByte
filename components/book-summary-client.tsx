@@ -39,6 +39,18 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
 
   // Ensure summary is structured (should always be for book display)
   if (!isStructuredSummary(book.summary)) {
+    // Check if it's a raw text summary
+    if (book.summary && typeof book.summary === 'object' && 'raw_text' in book.summary) {
+      const rawText = (book.summary as { raw_text: string }).raw_text;
+      return (
+        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-8">
+          <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap font-mono text-sm leading-relaxed">
+            {rawText}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-8 text-center text-[rgb(var(--muted-foreground))]">
         <p>This book summary is not available in the structured format.</p>
