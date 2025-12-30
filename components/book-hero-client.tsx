@@ -242,40 +242,39 @@ export function BookHeroClient({
             )}
           </div>
         )}
-      </div>
+
+
+        {/* Delete button (Owner or Editor) */}
+        {canDelete && (
+          <div className="pt-4 border-t border-[rgb(var(--border))] mt-4">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="w-full sm:w-auto">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Book
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the book
+                    "{book.title}" and remove all data from our servers.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         )}
 
-      {/* Delete button (Owner or Editor) */}
-      {canDelete && (
-        <div className="pt-4 border-t border-[rgb(var(--border))] mt-4">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="w-full sm:w-auto">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Book
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the book
-                  "{book.title}" and remove all data from our servers.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      )}
-
-    </div>
-    </section >
+      </div>
+    </section>
   );
 }
 
