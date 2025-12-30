@@ -28,10 +28,10 @@ type BookCardProps = {
   showLibraryActions?: boolean;
 };
 
-export function BookCard({ 
-  book, 
-  showDeleteButton = false, 
-  userRole = null, 
+export function BookCard({
+  book,
+  showDeleteButton = false,
+  userRole = null,
   isSavedToLibrary = false,
   isRead = false,
   isFavorited = false,
@@ -87,7 +87,7 @@ export function BookCard({
     }, 0);
     const colors = [
       'bg-slate-50',
-      'bg-blue-50', 
+      'bg-blue-50',
       'bg-green-50',
       'bg-purple-50',
       'bg-pink-50',
@@ -182,13 +182,13 @@ export function BookCard({
         {!isRawText && isStructuredSummary && (
           <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
             <span>
-              {(summary as { key_ideas?: unknown[] }).key_ideas && Array.isArray((summary as { key_ideas: unknown[] }).key_ideas) 
-                ? (summary as { key_ideas: unknown[] }).key_ideas.length 
+              {(summary as { key_ideas?: unknown[] }).key_ideas && Array.isArray((summary as { key_ideas: unknown[] }).key_ideas)
+                ? (summary as { key_ideas: unknown[] }).key_ideas.length
                 : 0} key ideas
             </span>
             <span>
-              {(summary as { chapters?: unknown[] }).chapters && Array.isArray((summary as { chapters: unknown[] }).chapters) 
-                ? (summary as { chapters: unknown[] }).chapters.length 
+              {(summary as { chapters?: unknown[] }).chapters && Array.isArray((summary as { chapters: unknown[] }).chapters)
+                ? (summary as { chapters: unknown[] }).chapters.length
                 : 0} chapters
             </span>
           </div>
@@ -226,17 +226,17 @@ export function BookCard({
                 Continue Reading
               </Link>
             </Button>
-            {showDeleteButton && userRole === "editor" && (
+            {showDeleteButton && (
               <DeleteBookButton bookId={id} bookTitle={title} />
             )}
             {userRole === "regular" && book.is_public && !showLibraryActions && (
-              <SaveToLibraryButton 
-                bookId={id} 
+              <SaveToLibraryButton
+                bookId={id}
                 isSaved={isSavedToLibrary}
               />
             )}
           </div>
-          
+
           {/* Library Actions for regular users */}
           {showLibraryActions && userRole === "regular" && (
             <LibraryActions

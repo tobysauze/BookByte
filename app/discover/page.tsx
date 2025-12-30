@@ -39,7 +39,7 @@ export default async function DiscoverPage() {
       .from("user_library")
       .select("book_id")
       .eq("user_id", user.id);
-    
+
     savedBookIds = (savedBooks ?? []).map(item => item.book_id);
   }
 
@@ -56,12 +56,13 @@ export default async function DiscoverPage() {
       </header>
 
       {publicBooks.length > 0 ? (
-        <BookGrid 
+        <BookGrid
           books={publicBooks.map(book => ({
             ...book,
             isSavedToLibrary: savedBookIds.includes(book.id)
           }))}
           userRole={userRole}
+          showDeleteButtons={userRole === "editor"}
         />
       ) : (
         <div className="rounded-3xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card))] p-12 text-center text-sm text-[rgb(var(--muted-foreground))]">
