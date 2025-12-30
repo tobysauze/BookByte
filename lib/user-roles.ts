@@ -15,9 +15,14 @@ export interface UserProfile {
 export async function getUserRole(): Promise<UserRole | null> {
   try {
     const supabase = await createSupabaseServerClient();
-    
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
+
+    // Hardcode admin access for specific users
+    if (user.email === "toby.sauze@gmail.com" || user.email === "tobysauze@hotmail.com") {
+      return "editor";
+    }
 
     const { data: profile, error } = await supabase
       .from("user_profiles")
@@ -43,7 +48,7 @@ export async function getUserRole(): Promise<UserRole | null> {
 export async function getUserProfile(): Promise<UserProfile | null> {
   try {
     const supabase = await createSupabaseServerClient();
-    
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
@@ -78,17 +83,17 @@ export async function isEditor(): Promise<boolean> {
  */
 export async function canEditBook(bookUserId: string, bookIsPublic: boolean): Promise<boolean> {
   const role = await getUserRole();
-  
+
   if (role === "editor") {
     return true; // Editors can edit any book
   }
-  
+
   // Regular users can edit their own books regardless of public status
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) return false;
-  
+
   return user.id === bookUserId;
 }
 
@@ -96,27 +101,27 @@ export async function canEditBook(bookUserId: string, bookIsPublic: boolean): Pr
  * Check if the current user can edit a book (using provided supabase client)
  */
 export async function canEditBookWithClient(
-  supabase: any, 
-  bookUserId: string, 
+  supabase: any,
+  bookUserId: string,
   bookIsPublic: boolean
 ): Promise<boolean> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       console.log("No user found in canEditBookWithClient");
       return false;
     }
-    
+
     console.log("Checking edit permissions for user:", user.id, "book owner:", bookUserId, "is public:", bookIsPublic);
-    
+
     // For now, let's simplify: users can edit their own books regardless of public status
     // This avoids the user_profiles table dependency
     const canEdit = user.id === bookUserId;
-    
+
     console.log("Can edit result:", canEdit);
     return canEdit;
-    
+
     // TODO: Re-enable editor check once user_profiles table is properly set up
     /*
     // Check if user is an editor
@@ -150,17 +155,17 @@ export async function canEditBookWithClient(
  */
 export async function canDeleteBook(bookUserId: string): Promise<boolean> {
   const role = await getUserRole();
-  
+
   if (role === "editor") {
     return true; // Editors can delete any book
   }
-  
+
   // Regular users can only delete their own books
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) return false;
-  
+
   return user.id === bookUserId;
 }
 
@@ -168,24 +173,24 @@ export async function canDeleteBook(bookUserId: string): Promise<boolean> {
  * Check if the current user can delete a book (using provided supabase client)
  */
 export async function canDeleteBookWithClient(
-  supabase: any, 
+  supabase: any,
   bookUserId: string
 ): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) return false;
-  
+
   // Check if user is an editor
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("is_editor")
     .eq("id", user.id)
     .single();
-  
+
   if (profile?.is_editor) {
     return true; // Editors can delete any book
   }
-  
+
   // Regular users can only delete their own books
   return user.id === bookUserId;
 }
