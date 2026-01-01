@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import { BookOpen, Lightbulb, List, Target, Quote, Headphones, Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -66,81 +68,119 @@ export function VerticalSummaryNav({
   if (!isStructuredSummary(summary)) {
     return null; // Don't show nav for raw text summaries
   }
-  
+
   const structuredSummary = summary;
-  
+
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
+
+  React.useEffect(() => {
+    // Auto-collapse on small screens
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setIsCollapsed(true);
+      } else {
+        setIsCollapsed(false);
+      }
+    };
+
+    // Initial check
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   return (
-    <div className="sticky left-0 top-24 z-40 h-[calc(100vh-6rem)] w-36 border-r border-[rgb(var(--border))] bg-[rgb(var(--background))] overflow-y-auto">
-      <div className="p-3 space-y-2">
-        {/* Contents Button */}
-        {onContentsClick && (
+    <div
+      className={`sticky left-0 top-24 z-40 h-[calc(100vh-6rem)] border-r border-[rgb(var(--border))] bg-[rgb(var(--background))] transition-all duration-300 ease-in-out ${isCollapsed ? "w-12" : "w-64"
+        }`}
+    >
+      <div className="flex flex-col h-full">
+        {/* Collapse Toggle */}
+        <div className="flex justify-end p-2 border-b border-[rgb(var(--border))]">
           <Button
-            variant="outline"
-            size="sm"
-            onClick={onContentsClick}
-            className="w-full mb-4"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setIsCollapsed(!isCollapsed)}
           >
-            <Menu className="h-4 w-4 mr-2" />
-            Contents
+            {isCollapsed ? <Menu className="h-4 w-4" /> : <Menu className="h-4 w-4 rotate-90" />}
           </Button>
-        )}
+        </div>
 
-        {/* Navigation Items */}
-        <nav className="space-y-2">
-          {sectionOrder.map((section) => {
-            const isActive = activeTab === section;
-            const Icon = sectionIcons[section];
-            const label = sectionLabels[section];
-            
-            // Get count for each section
-            let count = 0;
-            if (section === "key_ideas") count = structuredSummary.key_ideas.length;
-            else if (section === "chapters") count = structuredSummary.chapters.length;
-            else if (section === "actionable_insights") count = structuredSummary.actionable_insights.length;
-            else if (section === "quotes") count = structuredSummary.quotes.length;
+        <div className="p-3 space-y-2 flex-1 overflow-y-auto">
+          {/* Contents Button - Hide when collapsed */}
+          {!isCollapsed && onContentsClick && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onContentsClick}
+              className="w-full mb-4"
+            >
+              <Menu className="h-4 w-4 mr-2" />
+              Contents
+            </Button>
+          )}
 
-            return (
-              <Button
-                key={section}
-                variant={isActive ? "default" : "ghost"}
-                className={`w-full justify-start h-auto p-2 text-left ${
-                  isActive
+          {/* Navigation Items */}
+          <nav className="space-y-2">
+            {sectionOrder.map((section) => {
+              const isActive = activeTab === section;
+              const Icon = sectionIcons[section];
+              const label = sectionLabels[section];
+
+              // Get count for each section
+              let count = 0;
+              if (section === "key_ideas") count = structuredSummary.key_ideas.length;
+              else if (section === "chapters") count = structuredSummary.chapters.length;
+              else if (section === "actionable_insights") count = structuredSummary.actionable_insights.length;
+              else if (section === "quotes") count = structuredSummary.quotes.length;
+
+              return (
+                <Button
+                  key={section}
+                  variant={isActive ? "default" : "ghost"}
+                  className={`w-full justify-start h-auto p-2 text-left ${isActive
                     ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
                     : "hover:bg-[rgb(var(--muted))]"
-                }`}
-                onClick={() => onTabChange(section)}
-              >
-                <div className="flex items-center gap-2 w-full">
-                  <Icon className="h-4 w-4" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-xs">{label}</div>
-                    {count > 0 && (
-                      <div className="text-xs opacity-70 mt-0.5">
-                        {count}
+                    } ${isCollapsed ? "justify-center px-0" : ""}`}
+                  onClick={() => onTabChange(section)}
+                  title={label}
+                >
+                  <div className={`flex items-center gap-2 ${isCollapsed ? "justify-center" : "w-full"}`}>
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    {!isCollapsed && (
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-xs truncate">{label}</div>
+                        {count > 0 && (
+                          <div className="text-xs opacity-70 mt-0.5">
+                            {count}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
-              </Button>
-            );
-          })}
-        </nav>
+                </Button>
+              );
+            })}
+          </nav>
 
-        {/* Listen Button */}
-        {onGenerateAudio && (
-          <div className="mt-8 pt-6 border-t border-[rgb(var(--border))]">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={Boolean(isGenerating)}
-              onClick={() => onGenerateAudio(activeTab)}
-              className="w-full"
-            >
-              <Headphones className="h-4 w-4 mr-2" />
-              {isGenerating ? "Generating…" : "Listen"}
-            </Button>
-          </div>
-        )}
+          {/* Listen Button */}
+          {onGenerateAudio && !isCollapsed && (
+            <div className="mt-8 pt-6 border-t border-[rgb(var(--border))]">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={Boolean(isGenerating)}
+                onClick={() => onGenerateAudio(activeTab)}
+                className="w-full"
+              >
+                <Headphones className="h-4 w-4 mr-2" />
+                {isGenerating ? "Generating…" : "Listen"}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
