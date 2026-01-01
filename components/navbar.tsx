@@ -15,7 +15,7 @@ import {
 
   Plus,
   Menu,
-  User,
+  User as UserIcon,
 } from "lucide-react";
 
 import {
@@ -239,7 +239,7 @@ export function Navbar({ initialUser }: NavbarProps) {
                       <>
                         <Button asChild variant="outline" className="w-full justify-start" size="sm">
                           <Link href="/profile">
-                            <User className="mr-2 h-4 w-4" />
+                            <UserIcon className="mr-2 h-4 w-4" />
                             Profile
                           </Link>
                         </Button>
