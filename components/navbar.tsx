@@ -12,7 +12,7 @@ import {
   Heart,
   CheckCircle,
   Highlighter,
-  Highlighter,
+
   Plus,
   Menu,
   User,
