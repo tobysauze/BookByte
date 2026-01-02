@@ -32,10 +32,16 @@ export async function GET(req: NextRequest) {
         // Using .or() filter: file_url.neq.null,local_file_path.neq.null
         const { data: books, error } = await supabase
             .from("books")
-            .select("*, user_profiles(email)") // Join with user_profiles to get uploader email if possible, assuming user_profiles has email or we join auth.users (usually restricted).
-            // Note: Joining auth.users directly is often not allowed due to permissions.
-            // We'll try to get what we can. If 'user_profiles' stores email (it usually doesn't by default), we get it.
-            // If not, we might only show User ID.
+            .select(`
+                id,
+                title,
+                author,
+                created_at,
+                file_url,
+                local_file_path,
+                user_id,
+                user_profiles(email)
+            `)
             .or('file_url.neq.null,local_file_path.neq.null')
             .order("created_at", { ascending: false });
 
