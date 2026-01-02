@@ -2,15 +2,18 @@ import { BookGrid } from "@/components/book-grid";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import type { SupabaseSummary } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
 import { getUserRole } from "@/lib/user-roles";
+import { SearchInput } from "@/components/search-input";
 
-export default async function DiscoverPage() {
+export default async function DiscoverPage(props: { searchParams: Promise<{ query?: string }> }) {
   const supabase = await createSupabaseServerClient();
   const user = await getSessionUser();
   const userRole = await getUserRole();
+  const searchParams = await props.searchParams;
 
   // Fetch public books from all users
-  const { data: books, error } = await supabase
+  let queryBuilder = supabase
     .from("books")
     .select(`
       id,
@@ -27,6 +30,14 @@ export default async function DiscoverPage() {
     .eq("is_public", true)
     .order("created_at", { ascending: false })
     .limit(50);
+
+  // Apply search filter if present
+  if (searchParams?.query) {
+    const query = searchParams.query;
+    queryBuilder = queryBuilder.or(`title.ilike.%${query}%,author.ilike.%${query}%`);
+  }
+
+  const { data: books, error } = await queryBuilder;
 
   if (error) {
     console.error("Error fetching public books:", error);
@@ -47,14 +58,19 @@ export default async function DiscoverPage() {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.2em] text-[rgb(var(--muted-foreground))]">
-          Community summaries
-        </p>
-        <h1 className="text-3xl font-semibold">Discover shared books</h1>
-        <p className="max-w-2xl text-sm text-[rgb(var(--muted-foreground))]">
-          Explore summaries shared by the BookByte community. Discover new books and insights from fellow readers.
-        </p>
+      <header className="space-y-4">
+        <div className="space-y-3">
+          <p className="text-xs uppercase tracking-[0.2em] text-[rgb(var(--muted-foreground))]">
+            Community summaries
+          </p>
+          <h1 className="text-3xl font-semibold">Discover shared books</h1>
+          <p className="max-w-2xl text-sm text-[rgb(var(--muted-foreground))]">
+            Explore summaries shared by the BookByte community. Discover new books and insights from fellow readers.
+          </p>
+        </div>
+        <div className="pt-2">
+          <SearchInput placeholder="Search community books..." />
+        </div>
       </header>
 
       {publicBooks.length > 0 ? (

@@ -7,10 +7,13 @@ import { createSupabaseServerClient } from "@/lib/supabase";
 import type { SupabaseSummary } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
 import { getUserRole } from "@/lib/user-roles";
+import { SearchInput } from "@/components/search-input";
 
-export default async function LibraryPage() {
+export default async function LibraryPage(props: { searchParams: Promise<{ query?: string }> }) {
   const user = await getSessionUser();
   const userRole = await getUserRole();
+  const searchParams = await props.searchParams;
+  const query = searchParams?.query;
 
   if (!user) {
     return (
@@ -37,11 +40,17 @@ export default async function LibraryPage() {
 
   if (userRole === "editor") {
     // Editors see all their created books
-    const { data, error: editorError } = await supabase
+    let queryBuilder = supabase
       .from("books")
       .select("id, title, author, cover_url, file_url, audio_urls, progress_percent, is_public, created_at, word_count, description, category")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+
+    if (query) {
+      queryBuilder = queryBuilder.or(`title.ilike.%${query}%,author.ilike.%${query}%`);
+    }
+
+    const { data, error: editorError } = await queryBuilder;
 
     books = (data ?? []) as SupabaseSummary[];
     error = editorError;
@@ -49,24 +58,41 @@ export default async function LibraryPage() {
     // Regular users see both:
     // 1. Books they created themselves
     // 2. Books they saved from other users
-    const [ownBooksResult, savedBooksResult] = await Promise.all([
-      // Get books they created
-      supabase
-        .from("books")
-        .select("id, title, author, cover_url, file_url, audio_urls, progress_percent, is_public, created_at, word_count, description, category")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      // Get books they saved from user_library
-      supabase
-        .from("user_library")
-        .select(`
+
+    // Prepare owned books query
+    let ownBooksQuery = supabase
+      .from("books")
+      .select("id, title, author, cover_url, file_url, audio_urls, progress_percent, is_public, created_at, word_count, description, category")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (query) {
+      ownBooksQuery = ownBooksQuery.or(`title.ilike.%${query}%,author.ilike.%${query}%`);
+    }
+
+    // Prepare saved books query
+    // We utilize the !inner join to filter user_library rows based on the joined book's properties
+    let savedBooksQuery = supabase
+      .from("user_library")
+      // Use !inner to ensure we only get library entries where the book MATCHES the filter
+      .select(`
           book_id,
-          books(
+          books!inner(
             id, title, author, cover_url, file_url, audio_urls, progress_percent, is_public, created_at, word_count, description, category
           )
         `)
-        .eq("user_id", user.id)
-        .order("saved_at", { ascending: false })
+      .eq("user_id", user.id)
+      .order("saved_at", { ascending: false });
+
+    if (query) {
+      // Filter on the joined 'books' table
+      savedBooksQuery = savedBooksQuery.or(`title.ilike.%${query}%,author.ilike.%${query}%`, { foreignTable: 'books' });
+    }
+
+
+    const [ownBooksResult, savedBooksResult] = await Promise.all([
+      ownBooksQuery,
+      savedBooksQuery
     ]);
 
     const ownBooks = (ownBooksResult.data ?? []) as SupabaseSummary[];
@@ -155,6 +181,9 @@ export default async function LibraryPage() {
                 : "Your created summaries and books you've saved from the community."
               }
             </p>
+            <div className="pt-2">
+              <SearchInput placeholder={userRole === "editor" ? "Search my books..." : "Search my library..."} />
+            </div>
           </div>
           <div className="flex gap-3 pt-8">
             {userRole === "editor" ? (
