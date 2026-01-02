@@ -44,15 +44,22 @@ export function BookCard({
     cover_url: coverUrl,
     summary,
     progress_percent: progressPercent,
+    word_count: wordCount,
+    description,
+    category
   } = book;
 
   // Check if this is raw text format (new format)
-  const isRawText = summary && typeof summary === 'object' && 'raw_text' in summary && typeof (summary as Record<string, unknown>).raw_text === 'string';
+  // Note: summary might be undefined if we optimised the query to exclude it
+  const hasSummary = !!summary;
+  const isRawText = hasSummary && typeof summary === 'object' && 'raw_text' in summary && typeof (summary as Record<string, unknown>).raw_text === 'string';
   const rawText = isRawText ? (summary as { raw_text: string }).raw_text : null;
-  const isStructuredSummary = summary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
+  const isStructuredSummary = hasSummary && typeof summary === 'object' && 'quick_summary' in summary && typeof (summary as Record<string, unknown>).quick_summary === 'string';
 
   // Generate a category based on the book content or use a default
   const getCategory = () => {
+    if (category) return category;
+
     // Get text to analyze for category
     let textToAnalyze = '';
     if (isRawText && rawText) {
@@ -100,6 +107,8 @@ export function BookCard({
 
   // Get display summary - prefer short_summary, then quick_summary, then first 200 chars of raw_text
   const getDisplaySummary = () => {
+    if (description) return description;
+
     if (isStructuredSummary) {
       const structured = summary as { short_summary?: string; quick_summary?: string };
       if (structured.short_summary && typeof structured.short_summary === 'string') {
@@ -193,7 +202,12 @@ export function BookCard({
             </span>
           </div>
         )}
-        {isRawText && (
+        {(wordCount !== undefined && wordCount !== null) && (
+          <div className="mb-4 text-xs text-gray-500">
+            <span>{Math.ceil(wordCount / 250)} min read</span>
+          </div>
+        )}
+        {!wordCount && isRawText && (
           <div className="mb-4 text-xs text-gray-500">
             <span>{rawText ? Math.ceil(rawText.split(/\s+/).filter(word => word.length > 0).length / 250) : 0} min read</span>
           </div>

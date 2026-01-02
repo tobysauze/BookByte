@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { summarySchema, type SummaryPayload } from "@/lib/schemas";
 import { getUserRole } from "@/lib/user-roles";
+import { calculateBookMetadata } from "@/lib/metadata-utils";
 
 export const runtime = "nodejs";
 
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
         progress_percent: 0,
         is_public: false, // Start as private
         is_editor_created: (await getUserRole()) === "editor",
+        ...calculateBookMetadata(validationResult.data),
       })
       .select("id, title, author")
       .single();

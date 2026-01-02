@@ -66,6 +66,9 @@ export type SupabaseSummary = {
   analysis_results?: unknown | null;
   last_analyzed_at?: string | null;
   is_editor_created?: boolean;
+  word_count?: number | null;
+  description?: string | null;
+  category?: string | null;
 };
 
 

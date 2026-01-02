@@ -17,10 +17,12 @@ export default async function DiscoverPage() {
       title,
       author,
       cover_url,
-      summary,
       created_at,
       user_id,
-      is_public
+      is_public,
+      word_count,
+      description,
+      category
     `)
     .eq("is_public", true)
     .order("created_at", { ascending: false })

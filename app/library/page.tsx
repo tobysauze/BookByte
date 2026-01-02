@@ -39,7 +39,7 @@ export default async function LibraryPage() {
     // Editors see all their created books
     const { data, error: editorError } = await supabase
       .from("books")
-      .select("id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, created_at")
+      .select("id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, created_at, word_count, description, category")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -53,7 +53,7 @@ export default async function LibraryPage() {
       // Get books they created
       supabase
         .from("books")
-        .select("id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, created_at")
+        .select("id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, created_at, word_count, description, category")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
       // Get books they saved from user_library
@@ -62,7 +62,7 @@ export default async function LibraryPage() {
         .select(`
           book_id,
           books(
-            id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, created_at
+            id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, created_at, word_count, description, category
           )
         `)
         .eq("user_id", user.id)
