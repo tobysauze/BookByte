@@ -15,27 +15,18 @@ export default function ResetPasswordPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Handle PCKE code exchange if present in URL
+    // Handle PKCE code exchange by redirecting to the server-side callback
     useEffect(() => {
-        const exchangeCode = async () => {
-            const params = new URLSearchParams(window.location.search);
-            const code = params.get("code");
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
 
-            if (code) {
-                // Exchange the code for a session
-                const { error } = await supabase.auth.exchangeCodeForSession(code);
-                if (error) {
-                    console.error("Error exchanging code:", error);
-                    setError(error.message);
-                }
-
-                // Clear the code from the URL so we don't try to use it again
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-        };
-
-        exchangeCode();
-    }, [supabase]);
+        if (code) {
+            // Redirect to the callback route to handle the exchange server-side
+            // This avoids "PKCE verifier not found" errors on the client
+            const next = "/reset-password";
+            window.location.href = `/auth/callback?code=${code}&next=${next}`;
+        }
+    }, []);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
