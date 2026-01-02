@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, FileText, Download } from "lucide-react";
-import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -153,7 +152,7 @@ export default function AdminFilesPage() {
                                     </TableCell>
                                     <TableCell>
                                         <span className="text-sm text-muted-foreground">
-                                            {format(new Date(file.created_at), "MMM d, yyyy")}
+                                            {new Date(file.created_at).toLocaleDateString()}
                                         </span>
                                     </TableCell>
                                     <TableCell className="text-right">
