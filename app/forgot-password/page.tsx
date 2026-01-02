@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { ArrowLeft } from "lucide-react";
+import { sendPasswordResetLink } from "@/app/actions/auth-password-reset";
 
 export default function ForgotPasswordPage() {
     const supabase = createSupabaseBrowserClient();
@@ -22,12 +23,11 @@ export default function ForgotPasswordPage() {
         setError(null);
 
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-            });
+            // Use Server Action to avoid client-side PKCE cookie dependency
+            const { error } = await sendPasswordResetLink(email);
 
             if (error) {
-                throw error;
+                throw new Error(error);
             }
 
             setMessage("Check your email for the password reset link.");
