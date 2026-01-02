@@ -14,6 +14,9 @@ import { z } from "zod";
 import type { SupabaseSummary } from "@/lib/supabase";
 import type { SummaryPayload } from "@/lib/schemas";
 import { summarySchema } from "@/lib/schemas";
+import { HighlightableText } from "@/components/highlightable-text";
+import { useHighlights } from "@/lib/use-highlights"; // Keep this if used in main component, otherwise remove
+import { RawTextSummaryView } from "@/components/raw-text-summary-view";
 
 type BookSummaryClientProps = {
   book: SupabaseSummary;
@@ -42,12 +45,13 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
     // Check if it's a raw text summary
     if (book.summary && typeof book.summary === 'object' && 'raw_text' in book.summary) {
       const rawText = (book.summary as { raw_text: string }).raw_text;
+      // Hook must be called unconditionally, but since we are conditionally returning, we need to extract this component or use it at top level.
+      // Refactoring to use a sub-component for RawTextSummary to respect rules of hooks would be cleaner,
+      // but to keep it simple within this file structure, I'll extract the hook usage to a sub-component or modify the flow.
+      // Actually, let's just create a small internal component for the RawText view to handle its own hooks.
+
       return (
-        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-8">
-          <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap font-mono text-sm leading-relaxed">
-            {rawText}
-          </div>
-        </div>
+        <RawTextSummaryView bookId={book.id} content={rawText} />
       );
     }
 
