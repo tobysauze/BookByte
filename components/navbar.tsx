@@ -26,6 +26,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
 import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -152,6 +153,13 @@ export function Navbar({ initialUser }: NavbarProps) {
           <div className="hidden md:flex items-center gap-2">
             {user ? (
               <>
+                <div className="flex items-center gap-2 mr-2">
+                  {userRole === "editor" ? (
+                    <Badge variant="default" className="h-6 px-2 text-xs">Admin</Badge>
+                  ) : (
+                    <Badge variant="outline" className="h-6 px-2 text-xs">Standard</Badge>
+                  )}
+                </div>
                 {userRole === "editor" && (
                   <>
                     <Button asChild variant="default" size="sm">
