@@ -13,6 +13,7 @@ export async function sendPasswordResetLink(email: string) {
         auth: {
             autoRefreshToken: false,
             persistSession: false,
+            flowType: "pkce",
         },
     });
 
