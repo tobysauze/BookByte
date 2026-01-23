@@ -61,8 +61,17 @@ export default function CreateBookPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create book");
+        let message = "Failed to create book";
+        try {
+          const errorData = (await response.json()) as { error?: string };
+          if (typeof errorData?.error === "string" && errorData.error.length > 0) {
+            message = errorData.error;
+          }
+        } catch {
+          // Non-JSON error response (e.g. HTML from a platform error page)
+          message = response.statusText || message;
+        }
+        throw new Error(message);
       }
 
       const { bookId } = await response.json();

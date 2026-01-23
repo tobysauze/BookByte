@@ -2,7 +2,6 @@ import { BookGrid } from "@/components/book-grid";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import type { SupabaseSummary } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
-import { getSessionUser } from "@/lib/auth";
 import { getUserRole } from "@/lib/user-roles";
 import { SearchInput } from "@/components/search-input";
 

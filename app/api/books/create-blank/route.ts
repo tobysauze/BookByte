@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { summarySchema, type SummaryPayload } from "@/lib/schemas";
-import { getUserRole } from "@/lib/user-roles";
 import { calculateBookMetadata } from "@/lib/metadata-utils";
 
 export const runtime = "nodejs";
@@ -95,7 +94,10 @@ export async function POST(request: NextRequest) {
         audio_urls: {},
         progress_percent: 0,
         is_public: false, // Start as private
-        is_editor_created: (await getUserRole()) === "editor",
+        // Avoid relying on user_profiles read in production; use known editor emails.
+        is_editor_created:
+          user.email === "toby.sauze@gmail.com" ||
+          user.email === "tobysauze@hotmail.com",
         ...calculateBookMetadata(validationResult.data),
       })
       .select("id, title, author")
@@ -104,7 +106,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("Error creating blank book:", error);
       return NextResponse.json(
-        { error: "Failed to create blank book." },
+        { error: error.message || "Failed to create blank book." },
         { status: 500 },
       );
     }
