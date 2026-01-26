@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
@@ -12,6 +13,7 @@ export default function CreateBookPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
+  const [summaryText, setSummaryText] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -75,7 +77,33 @@ export default function CreateBookPage() {
       }
 
       const { bookId } = await response.json();
-      toast.success("Blank book created successfully!");
+      toast.success("Book created!");
+
+      // Optional: parse and organize pasted summary text immediately.
+      if (summaryText.trim()) {
+        toast.message("Organizing pasted summary…");
+        const parseResponse = await fetch(`/api/books/${bookId}/upload-summary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ summaryText: summaryText.trim() }),
+        });
+
+        if (!parseResponse.ok) {
+          let message = "Failed to organize pasted summary";
+          try {
+            const errorData = (await parseResponse.json()) as { error?: string };
+            if (typeof errorData?.error === "string" && errorData.error.length > 0) {
+              message = errorData.error;
+            }
+          } catch {
+            message = parseResponse.statusText || message;
+          }
+          toast.error(message);
+        } else {
+          toast.success("Summary organized!");
+        }
+      }
+
       router.push(`/books/${bookId}`);
     } catch (error) {
       console.error("Error creating blank book:", error);
@@ -100,7 +128,7 @@ export default function CreateBookPage() {
       <div className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">Create New Book</h1>
         <p className="text-sm text-[rgb(var(--muted-foreground))]">
-          Create a blank book entry that you can fill in manually. You'll be able to edit all details after creation.
+          Create a blank book entry that you can fill in manually. You&apos;ll be able to edit all details after creation.
         </p>
       </div>
 
@@ -132,6 +160,21 @@ export default function CreateBookPage() {
             disabled={isCreating}
             className="w-full"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="summaryText">Paste Summary Text (optional)</Label>
+          <Textarea
+            id="summaryText"
+            placeholder="Paste a full summary here (with chapter headings, key ideas, quotes, etc). We’ll auto-detect and organize it into the correct sections after the book is created."
+            value={summaryText}
+            onChange={(e) => setSummaryText(e.target.value)}
+            disabled={isCreating}
+            className="min-h-[220px] w-full font-mono text-sm"
+          />
+          <p className="text-xs text-[rgb(var(--muted-foreground))]">
+            Tip: Headings like “Chapters”, “Key Ideas”, “Actionable Insights”, and “Quotes” improve accuracy.
+          </p>
         </div>
 
         <div className="flex gap-4">

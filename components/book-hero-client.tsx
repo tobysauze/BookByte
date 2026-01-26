@@ -207,18 +207,24 @@ export function BookHeroClient({
           />
         </div>
 
-        {/* Editor controls */}
-        {userRole === "editor" && canEdit && (
+        {/* Edit controls (owner or editor) */}
+        {canEdit && (
           <div className="space-y-4 pt-2">
             <div className="flex flex-wrap gap-2">
               <UploadSummaryButton bookId={book.id} />
-              <UploadChaptersButton bookId={book.id} />
+              {userRole === "editor" ? <UploadChaptersButton bookId={book.id} /> : null}
             </div>
-            <VisibilityToggle bookId={book.id} initialIsPublic={book.is_public} />
-            <CoverUpload
-              bookId={book.id}
-              currentCoverUrl={book.cover_url}
-            />
+
+            {/* Editor-only controls */}
+            {userRole === "editor" ? (
+              <>
+                <VisibilityToggle bookId={book.id} initialIsPublic={book.is_public} />
+                <CoverUpload
+                  bookId={book.id}
+                  currentCoverUrl={book.cover_url}
+                />
+              </>
+            ) : null}
           </div>
         )}
 
@@ -259,7 +265,7 @@ export function BookHeroClient({
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This action cannot be undone. This will permanently delete the book
-                    "{book.title}" and remove all data from our servers.
+                    &nbsp;&quot;{book.title}&quot; and remove all data from our servers.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

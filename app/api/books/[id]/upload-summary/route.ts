@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
-import { summarySchema, type SummaryPayload } from "@/lib/schemas";
-import { getUserRole } from "@/lib/user-roles";
+import { summarySchema } from "@/lib/schemas";
 import { canEditBook } from "@/lib/user-roles";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { calculateBookMetadata } from "@/lib/metadata-utils";
 
 export const runtime = "nodejs";
 
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL = process.env.OPENROUTER_PARSER_MODEL || process.env.OPENROUTER_MODEL || "openai/gpt-4o";
+
 const OPENAI_CLIENT = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 const GEMINI_CLIENT = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+const OPENROUTER_CLIENT = OPENROUTER_API_KEY
+  ? new OpenAI({
+      apiKey: OPENROUTER_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      defaultHeaders: {
+        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+        "X-Title": "BookByte",
+      },
+    })
+  : null;
 
 /**
  * Parse and organize an uploaded summary text into structured format
@@ -30,15 +43,6 @@ export async function POST(
       return NextResponse.json(
         { error: "You must be logged in to upload summaries." },
         { status: 401 },
-      );
-    }
-
-    // Check if user is an editor
-    const userRole = await getUserRole();
-    if (userRole !== "editor") {
-      return NextResponse.json(
-        { error: "Only editors can upload summaries." },
-        { status: 403 },
       );
     }
 
@@ -78,7 +82,7 @@ export async function POST(
     // Use AI to parse the summary text into structured format
     console.log("📝 Parsing uploaded summary text...");
     
-    let parsedSummary: z.infer<typeof summarySchema>;
+    let parsedSummary: z.infer<typeof summarySchema> | null = null;
     try {
       const parsePrompt = `You are organizing a book summary that was written elsewhere. Your task is to parse the following text and organize it into the required JSON structure.
 
@@ -124,40 +128,18 @@ Return ONLY valid JSON matching this exact structure (no markdown formatting, no
   ]
 }`;
 
-      // Try Gemini first, fallback to OpenAI
-      if (GEMINI_CLIENT) {
+      // Prefer OpenRouter (matches rest of app), fallback to Gemini, then OpenAI.
+      if (!parsedSummary && OPENROUTER_CLIENT) {
         try {
-          const model = GEMINI_CLIENT.getGenerativeModel({
-            model: process.env.GEMINI_SUMMARY_MODEL || "gemini-2.5-pro",
-            systemInstruction: {
-              role: "system",
-              parts: [{ text: "You are a helpful assistant that organizes book summaries into structured JSON format." }],
-            },
-          });
-
-          const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: parsePrompt }] }],
-            generationConfig: {
-              temperature: 0.3,
-              responseMimeType: "application/json",
-            },
-          });
-
-          const textResponse = result.response.text();
-          const parsed = JSON.parse(textResponse);
-          parsedSummary = summarySchema.parse(parsed);
-        } catch (geminiError) {
-          console.error("Gemini parsing failed, trying OpenAI:", geminiError);
-          if (!OPENAI_CLIENT) throw new Error("No AI provider available");
-          
-          const completion = await OPENAI_CLIENT.chat.completions.create({
-            model: process.env.OPENAI_SUMMARY_MODEL || "gpt-4o",
+          const completion = await OPENROUTER_CLIENT.chat.completions.create({
+            model: OPENROUTER_MODEL,
             temperature: 0.3,
             response_format: { type: "json_object" },
             messages: [
               {
                 role: "system",
-                content: "You are a helpful assistant that organizes book summaries into structured JSON format.",
+                content:
+                  "You are a helpful assistant that organizes book summaries into structured JSON format.",
               },
               {
                 role: "user",
@@ -168,12 +150,41 @@ Return ONLY valid JSON matching this exact structure (no markdown formatting, no
           });
 
           const content = completion.choices[0]?.message?.content;
-          if (!content) throw new Error("OpenAI did not return any content");
-          
+          if (!content) throw new Error("OpenRouter did not return any content");
           const parsed = JSON.parse(content);
           parsedSummary = summarySchema.parse(parsed);
+        } catch (openRouterError) {
+          console.error("OpenRouter parsing failed, trying Gemini/OpenAI:", openRouterError);
         }
-      } else if (OPENAI_CLIENT) {
+      }
+
+      if (!parsedSummary && GEMINI_CLIENT) {
+        const model = GEMINI_CLIENT.getGenerativeModel({
+          model: process.env.GEMINI_SUMMARY_MODEL || "gemini-2.5-pro",
+          systemInstruction: {
+            role: "system",
+            parts: [
+              {
+                text: "You are a helpful assistant that organizes book summaries into structured JSON format.",
+              },
+            ],
+          },
+        });
+
+        const result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: parsePrompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            responseMimeType: "application/json",
+          },
+        });
+
+        const textResponse = result.response.text();
+        const parsed = JSON.parse(textResponse);
+        parsedSummary = summarySchema.parse(parsed);
+      }
+
+      if (!parsedSummary && OPENAI_CLIENT) {
         const completion = await OPENAI_CLIENT.chat.completions.create({
           model: process.env.OPENAI_SUMMARY_MODEL || "gpt-4o",
           temperature: 0.3,
@@ -196,20 +207,27 @@ Return ONLY valid JSON matching this exact structure (no markdown formatting, no
         
         const parsed = JSON.parse(content);
         parsedSummary = summarySchema.parse(parsed);
-      } else {
-        throw new Error("No AI provider configured");
+      }
+
+      if (!parsedSummary) {
+        throw new Error(
+          "No AI provider configured. Set OPENROUTER_API_KEY (recommended) or OPENAI_API_KEY / GEMINI_API_KEY.",
+        );
       }
 
       // Ensure short_summary is within character limit
       if (parsedSummary.short_summary.length > 200) {
-        parsedSummary.short_summary = parsedSummary.short_summary.substring(0, 197) + "...";
+        parsedSummary.short_summary =
+          parsedSummary.short_summary.substring(0, 197) + "...";
       }
 
       // Update the book with the parsed summary
+      const metadata = calculateBookMetadata(parsedSummary);
       const { error: updateError } = await supabase
         .from("books")
         .update({
           summary: parsedSummary,
+          ...metadata,
         })
         .eq("id", id);
 
