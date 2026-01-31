@@ -25,6 +25,57 @@ const OPENROUTER_CLIENT = OPENROUTER_API_KEY
     })
   : null;
 
+function splitTextIntoChunks(text: string, maxChars: number): string[] {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+
+  // Split on paragraph boundaries first to preserve readability.
+  const paragraphs = normalized.split(/\n{2,}/g).map((p) => p.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const p of paragraphs) {
+    // If a single paragraph is huge, hard-split it.
+    if (p.length > maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let i = 0; i < p.length; i += maxChars) {
+        chunks.push(p.slice(i, i + maxChars));
+      }
+      continue;
+    }
+
+    const next = current ? `${current}\n\n${p}` : p;
+    if (next.length <= maxChars) {
+      current = next;
+    } else {
+      if (current) chunks.push(current);
+      current = p;
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function buildFullSummaryChapters(summaryText: string): Array<{ title: string; summary: string }> {
+  // `chapterSummarySchema.summary` allows up to 100000 chars. Keep some headroom.
+  const MAX_CHARS = 90000;
+  const chunks = splitTextIntoChunks(summaryText, MAX_CHARS);
+  if (chunks.length === 0) return [];
+
+  if (chunks.length === 1) {
+    return [{ title: "Full Summary (pasted)", summary: chunks[0] }];
+  }
+
+  return chunks.map((chunk, idx) => ({
+    title: `Full Summary (pasted) — Part ${idx + 1}/${chunks.length}`,
+    summary: chunk,
+  }));
+}
+
 /**
  * Parse and organize an uploaded summary text into structured format
  */
@@ -84,9 +135,12 @@ export async function POST(
     
     let parsedSummary: z.infer<typeof summarySchema> | null = null;
     try {
-      const parsePrompt = `You are organizing a book summary that was written elsewhere. Your task is to parse the following text and organize it into the required JSON structure.
+      const parsePrompt = `You are organizing a book summary that was written elsewhere. Your task is to organize the following text into the required JSON structure.
 
 IMPORTANT INSTRUCTIONS:
+0. Do NOT invent content. Do NOT omit major content. Preserve as much of the original wording as possible.
+   - If something doesn't clearly fit, include it under "chapters" (as a section) rather than dropping it.
+   - Ensure the *entire* summary is represented across the output fields.
 1. Extract or create a "short_summary" - a 1-2 sentence summary (MAX 200 characters). Count characters carefully!
 2. Extract or create a "quick_summary" - a comprehensive 3-4 paragraph executive overview
 3. Extract "key_ideas" - look for numbered lists, bullet points, or sections that describe key concepts/principles. Each should have a title and detailed text (at least 3).
@@ -219,6 +273,22 @@ Return ONLY valid JSON matching this exact structure (no markdown formatting, no
       if (parsedSummary.short_summary.length > 200) {
         parsedSummary.short_summary =
           parsedSummary.short_summary.substring(0, 197) + "...";
+      }
+
+      // Ensure short_summary meets min length (schema requires >= 20)
+      if (parsedSummary.short_summary.length < 20) {
+        const fallback = summaryText.trim().replace(/\s+/g, " ");
+        parsedSummary.short_summary = (fallback.length > 200 ? fallback.slice(0, 197) + "..." : fallback).slice(0, 200);
+        if (parsedSummary.short_summary.length < 20) {
+          parsedSummary.short_summary = "A detailed summary is available below.";
+        }
+      }
+
+      // Lossless: attach the full pasted summary text as additional chapter(s),
+      // so nothing can be missing even if parsing is imperfect.
+      const fullSummaryChapters = buildFullSummaryChapters(summaryText);
+      if (fullSummaryChapters.length > 0) {
+        parsedSummary.chapters = [...parsedSummary.chapters, ...fullSummaryChapters];
       }
 
       // Update the book with the parsed summary
