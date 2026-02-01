@@ -13,6 +13,8 @@
  *   --dry-run     Don’t call OpenAI / don’t upload / don’t update DB
  */
 
+import "dotenv/config";
+
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
