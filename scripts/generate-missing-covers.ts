@@ -48,13 +48,15 @@ function buildPrompt(book: BookRow) {
 
   // We’re intentionally NOT asking it to replicate any existing cover. We only match “vibe” loosely.
   return [
-    "Design an original, modern, cartoony (illustrated) book cover.",
-    "Portrait 2:3 book cover composition, with clean margins and strong readability.",
-    "Include the book title and author name as clear, legible text on the cover (no logos, no publisher marks).",
-    "Do NOT copy or imitate any existing book cover art. Avoid recognizable trademarks or brand typography.",
-    "Style: vibrant but tasteful, friendly illustration, subtle texture, high contrast between text and background.",
+    "Design an original, simple cartoony book cover in a flat vector / icon style.",
+    "Portrait 2:3 book cover composition, centered layout, clean margins, strong readability.",
+    "Use a limited color palette (2–4 colors). Smooth shapes, minimal detail, no photorealism.",
+    "Place a single bold icon/illustration in the center that hints at the theme.",
+    "Typography: big, bold title near top; smaller author name near bottom. Keep text perfectly legible.",
+    "No logos, no publisher marks, no trademarks.",
+    "Do NOT copy or imitate any existing book cover art. Avoid recognizable compositions or exact typography.",
     category ? `Genre/category vibe: ${category}.` : "",
-    desc ? `Story/summary (for mood + imagery): ${desc}` : "",
+    desc ? `Story/summary (for mood + icon idea): ${desc}` : "",
     `Title: ${title}`,
     author ? `Author: ${author}` : "Author: (unknown)",
   ]
