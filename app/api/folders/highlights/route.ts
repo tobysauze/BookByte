@@ -5,17 +5,26 @@ import { getSessionUser } from "@/lib/auth";
 export async function POST(request: NextRequest) {
   try {
     const { supabase, response } = createSupabaseRouteHandlerClient(request);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const body = await request.json();
     const { folderId, highlightId } = body;
 
     if (!folderId || !highlightId) {
-      return NextResponse.json({ error: "Folder ID and Highlight ID are required" }, { status: 400 });
+      return applyCookies(
+        NextResponse.json(
+          { error: "Folder ID and Highlight ID are required" },
+          { status: 400 },
+        ),
+      );
     }
 
     // Verify the folder belongs to the user
@@ -27,7 +36,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!folder) {
-      return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+      return applyCookies(NextResponse.json({ error: "Folder not found" }, { status: 404 }));
     }
 
     // Verify the highlight belongs to the user
@@ -39,7 +48,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!highlight) {
-      return NextResponse.json({ error: "Highlight not found" }, { status: 404 });
+      return applyCookies(NextResponse.json({ error: "Highlight not found" }, { status: 404 }));
     }
 
     const { data, error } = await supabase
@@ -54,12 +63,21 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("Error adding highlight to folder:", error);
       if (error.code === "23505") {
-        return NextResponse.json({ error: "Highlight already in folder" }, { status: 400 });
+        return applyCookies(
+          NextResponse.json({ error: "Highlight already in folder" }, { status: 400 }),
+        );
       }
-      return NextResponse.json({ error: "Failed to add highlight to folder" }, { status: 500 });
+      return applyCookies(
+        NextResponse.json({ error: "Failed to add highlight to folder" }, { status: 500 }),
+      );
     }
 
-    return NextResponse.json({ success: true, folderHighlight: data }, { headers: response.headers });
+    return applyCookies(
+      NextResponse.json(
+        { success: true, folderHighlight: data },
+        { headers: response.headers },
+      ),
+    );
   } catch (error) {
     console.error("Error in POST /api/folders/highlights:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -69,10 +87,14 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { supabase, response } = createSupabaseRouteHandlerClient(request);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -80,7 +102,12 @@ export async function DELETE(request: NextRequest) {
     const highlightId = searchParams.get("highlightId");
 
     if (!folderId || !highlightId) {
-      return NextResponse.json({ error: "Folder ID and Highlight ID are required" }, { status: 400 });
+      return applyCookies(
+        NextResponse.json(
+          { error: "Folder ID and Highlight ID are required" },
+          { status: 400 },
+        ),
+      );
     }
 
     // Verify the folder belongs to the user
@@ -92,7 +119,7 @@ export async function DELETE(request: NextRequest) {
       .single();
 
     if (!folder) {
-      return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+      return applyCookies(NextResponse.json({ error: "Folder not found" }, { status: 404 }));
     }
 
     const { error } = await supabase
@@ -103,10 +130,12 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       console.error("Error removing highlight from folder:", error);
-      return NextResponse.json({ error: "Failed to remove highlight from folder" }, { status: 500 });
+      return applyCookies(
+        NextResponse.json({ error: "Failed to remove highlight from folder" }, { status: 500 }),
+      );
     }
 
-    return NextResponse.json({ success: true }, { headers: response.headers });
+    return applyCookies(NextResponse.json({ success: true }, { headers: response.headers }));
   } catch (error) {
     console.error("Error in DELETE /api/folders/highlights:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -116,17 +145,21 @@ export async function DELETE(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { supabase, response } = createSupabaseRouteHandlerClient(request);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const searchParams = request.nextUrl.searchParams;
     const folderId = searchParams.get("folderId");
 
     if (!folderId) {
-      return NextResponse.json({ error: "Folder ID is required" }, { status: 400 });
+      return applyCookies(NextResponse.json({ error: "Folder ID is required" }, { status: 400 }));
     }
 
     // Verify the folder belongs to the user and get highlights
@@ -156,7 +189,9 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("Error fetching folder highlights:", error);
-      return NextResponse.json({ error: "Failed to fetch folder highlights" }, { status: 500 });
+      return applyCookies(
+        NextResponse.json({ error: "Failed to fetch folder highlights" }, { status: 500 }),
+      );
     }
 
     // Verify folder ownership
@@ -168,18 +203,23 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (!folder) {
-      return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+      return applyCookies(NextResponse.json({ error: "Folder not found" }, { status: 404 }));
     }
 
     // Transform the data
     const highlights = (folderHighlights || [])
-      .map((fh: any) => fh.user_highlights)
+      .map((fh: { user_highlights?: unknown }) => fh.user_highlights)
       .filter(Boolean);
 
-    return NextResponse.json({ 
-      folder,
-      highlights 
-    }, { headers: response.headers });
+    return applyCookies(
+      NextResponse.json(
+        {
+          folder,
+          highlights,
+        },
+        { headers: response.headers },
+      ),
+    );
   } catch (error) {
     console.error("Error in GET /api/folders/highlights:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

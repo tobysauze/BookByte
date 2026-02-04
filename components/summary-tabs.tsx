@@ -254,7 +254,12 @@ export function SummaryContent({
               <div className="space-y-6 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-8">
                 <div className="text-center space-y-4">
                   <div className="flex justify-center">
-                    <Badge className="text-sm px-3 py-1">Chapter {currentItemIndex + 1}</Badge>
+                    <Badge className="text-sm px-3 py-1">
+                      {typeof currentChapter.title === "string" &&
+                      currentChapter.title.startsWith("Full Summary (pasted)")
+                        ? "Full Summary"
+                        : `Chapter ${currentItemIndex + 1}`}
+                    </Badge>
                   </div>
                   <h4 className="text-2xl font-bold">{currentChapter.title}</h4>
                 </div>
@@ -366,7 +371,7 @@ export function SummaryContent({
                     <Badge className="text-sm px-3 py-1">Quote {currentItemIndex + 1}</Badge>
                   </div>
                   <blockquote className="text-xl leading-relaxed text-center text-[rgb(var(--foreground))] italic">
-                    "{currentQuote}"
+                    &quot;{currentQuote}&quot;
                   </blockquote>
                 </div>
               </div>

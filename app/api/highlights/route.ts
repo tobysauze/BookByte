@@ -5,10 +5,14 @@ import { getSessionUser } from "@/lib/auth";
 export async function GET(request: NextRequest) {
   try {
     const { supabase, response } = createSupabaseRouteHandlerClient(request);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -28,10 +32,12 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("Error fetching highlights:", error);
-      return NextResponse.json({ error: "Failed to fetch highlights" }, { status: 500 });
+      return applyCookies(NextResponse.json({ error: "Failed to fetch highlights" }, { status: 500 }));
     }
 
-    return NextResponse.json({ highlights: data || [] }, { headers: response.headers });
+    return applyCookies(
+      NextResponse.json({ highlights: data || [] }, { headers: response.headers }),
+    );
   } catch (error) {
     console.error("Error in GET /api/highlights:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -41,17 +47,23 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { supabase, response } = createSupabaseRouteHandlerClient(request);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const body = await request.json();
     const { bookId, section, itemIndex, highlightedText, contextText, startOffset, endOffset, color } = body;
 
     if (!bookId || !section || highlightedText === undefined) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return applyCookies(
+        NextResponse.json({ error: "Missing required fields" }, { status: 400 }),
+      );
     }
 
     const { data, error } = await supabase
@@ -72,10 +84,10 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("Error creating highlight:", error);
-      return NextResponse.json({ error: "Failed to create highlight" }, { status: 500 });
+      return applyCookies(NextResponse.json({ error: "Failed to create highlight" }, { status: 500 }));
     }
 
-    return NextResponse.json({ highlight: data }, { headers: response.headers });
+    return applyCookies(NextResponse.json({ highlight: data }, { headers: response.headers }));
   } catch (error) {
     console.error("Error in POST /api/highlights:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -85,17 +97,23 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { supabase, response } = createSupabaseRouteHandlerClient(request);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const searchParams = request.nextUrl.searchParams;
     const highlightId = searchParams.get("id");
 
     if (!highlightId) {
-      return NextResponse.json({ error: "Missing highlight ID" }, { status: 400 });
+      return applyCookies(
+        NextResponse.json({ error: "Missing highlight ID" }, { status: 400 }),
+      );
     }
 
     const { error } = await supabase
@@ -106,10 +124,10 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       console.error("Error deleting highlight:", error);
-      return NextResponse.json({ error: "Failed to delete highlight" }, { status: 500 });
+      return applyCookies(NextResponse.json({ error: "Failed to delete highlight" }, { status: 500 }));
     }
 
-    return NextResponse.json({ success: true }, { headers: response.headers });
+    return applyCookies(NextResponse.json({ success: true }, { headers: response.headers }));
   } catch (error) {
     console.error("Error in DELETE /api/highlights:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -119,17 +137,23 @@ export async function DELETE(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const { supabase, response } = createSupabaseRouteHandlerClient(request);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const body = await request.json();
     const { id, color } = body;
 
     if (!id || !color) {
-      return NextResponse.json({ error: "Missing highlight ID or color" }, { status: 400 });
+      return applyCookies(
+        NextResponse.json({ error: "Missing highlight ID or color" }, { status: 400 }),
+      );
     }
 
     const { data, error } = await supabase
@@ -142,10 +166,12 @@ export async function PUT(request: NextRequest) {
 
     if (error) {
       console.error("Error updating highlight color:", error);
-      return NextResponse.json({ error: "Failed to update highlight color" }, { status: 500 });
+      return applyCookies(
+        NextResponse.json({ error: "Failed to update highlight color" }, { status: 500 }),
+      );
     }
 
-    return NextResponse.json({ highlight: data }, { headers: response.headers });
+    return applyCookies(NextResponse.json({ highlight: data }, { headers: response.headers }));
   } catch (error) {
     console.error("Error in PUT /api/highlights:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

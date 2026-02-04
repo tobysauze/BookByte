@@ -12,6 +12,10 @@ export async function PATCH(
     console.log("Title update request for book ID:", id);
     
     const { supabase, response } = createSupabaseRouteHandlerClient(req);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     
     // Try to get user from the supabase client directly
     const { data: { user: supabaseUser }, error: userError } = await supabase.auth.getUser();
@@ -22,7 +26,7 @@ export async function PATCH(
 
     if (!user && !supabaseUser) {
       console.log("No user found in title update request");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const currentUser = user || supabaseUser;
@@ -37,7 +41,7 @@ export async function PATCH(
 
     if (fetchError || !book) {
       console.error("Error fetching book:", fetchError);
-      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+      return applyCookies(NextResponse.json({ error: "Book not found" }, { status: 404 }));
     }
 
     console.log("Book found:", { id: book.id, user_id: book.user_id, is_public: book.is_public });
@@ -46,11 +50,16 @@ export async function PATCH(
     try {
       const canEdit = await canEditBookWithClient(supabase, book.user_id, book.is_public);
       if (!canEdit) {
-        return NextResponse.json({ error: "You don't have permission to edit this book" }, { status: 403 });
+        return applyCookies(
+          NextResponse.json(
+            { error: "You don't have permission to edit this book" },
+            { status: 403 },
+          ),
+        );
       }
     } catch (permissionError) {
       console.error("Error checking edit permissions:", permissionError);
-      return NextResponse.json({ error: "Failed to verify permissions" }, { status: 500 });
+      return applyCookies(NextResponse.json({ error: "Failed to verify permissions" }, { status: 500 }));
     }
 
     // Parse the request body
@@ -61,15 +70,17 @@ export async function PATCH(
       console.log("Received title:", title);
     } catch (parseError) {
       console.error("Error parsing request body:", parseError);
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return applyCookies(NextResponse.json({ error: "Invalid request body" }, { status: 400 }));
     }
 
     if (!title || typeof title !== "string" || title.trim().length === 0) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
+      return applyCookies(NextResponse.json({ error: "Title is required" }, { status: 400 }));
     }
 
     if (title.trim().length > 200) {
-      return NextResponse.json({ error: "Title must be less than 200 characters" }, { status: 400 });
+      return applyCookies(
+        NextResponse.json({ error: "Title must be less than 200 characters" }, { status: 400 }),
+      );
     }
 
     // Update the book title
@@ -81,19 +92,19 @@ export async function PATCH(
 
     if (updateError) {
       console.error("Error updating book title:", updateError);
-      return NextResponse.json({ error: "Failed to update book title" }, { status: 500 });
+      return applyCookies(NextResponse.json({ error: "Failed to update book title" }, { status: 500 }));
     }
 
     console.log("Book title updated successfully");
 
-    return NextResponse.json({ 
+    return applyCookies(NextResponse.json({ 
       success: true,
       title: title.trim(),
       message: "Title updated successfully" 
     }, { 
       status: 200,
       headers: response.headers 
-    });
+    }));
   } catch (error) {
     console.error("Error in /api/books/[id]/title:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

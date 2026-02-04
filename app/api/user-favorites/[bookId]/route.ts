@@ -7,18 +7,22 @@ export async function POST(
 ) {
   try {
     const { bookId } = await params;
-    const { supabase, response } = createSupabaseRouteHandlerClient(req);
+    const { supabase, response: authResponse } = createSupabaseRouteHandlerClient(req);
     
     // Get the current user from the Supabase client
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
       console.error("Error getting user:", userError);
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     // Ensure the book exists and is public
@@ -29,11 +33,15 @@ export async function POST(
       .single();
 
     if (bookError || !book) {
-      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+      const result = NextResponse.json({ error: "Book not found" }, { status: 404 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     if (!book.is_public) {
-      return NextResponse.json({ error: "Cannot favorite a private book." }, { status: 403 });
+      const result = NextResponse.json({ error: "Cannot favorite a private book." }, { status: 403 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     // Check if already favorited
@@ -45,7 +53,9 @@ export async function POST(
       .single();
 
     if (existingEntry) {
-      return NextResponse.json({ success: true, message: "Book already in favorites." }, { status: 200 });
+      const result = NextResponse.json({ success: true, message: "Book already in favorites." }, { status: 200 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     // Add to favorites
@@ -55,10 +65,14 @@ export async function POST(
 
     if (insertError) {
       console.error("Error adding book to favorites:", insertError);
-      return NextResponse.json({ error: "Failed to add book to favorites." }, { status: 500 });
+      const result = NextResponse.json({ error: "Failed to add book to favorites." }, { status: 500 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
-    return NextResponse.json({ success: true, message: "Book added to favorites." }, { status: 200 });
+    const result = NextResponse.json({ success: true, message: "Book added to favorites." }, { status: 200 });
+    authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+    return result;
   } catch (error) {
     console.error("Error in /api/user-favorites/[bookId] (POST):", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -71,18 +85,22 @@ export async function DELETE(
 ) {
   try {
     const { bookId } = await params;
-    const { supabase, response } = createSupabaseRouteHandlerClient(req);
+    const { supabase, response: authResponse } = createSupabaseRouteHandlerClient(req);
     
     // Get the current user from the Supabase client
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
       console.error("Error getting user:", userError);
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     const { error: deleteError } = await supabase
@@ -93,10 +111,14 @@ export async function DELETE(
 
     if (deleteError) {
       console.error("Error removing book from favorites:", deleteError);
-      return NextResponse.json({ error: "Failed to remove book from favorites." }, { status: 500 });
+      const result = NextResponse.json({ error: "Failed to remove book from favorites." }, { status: 500 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
-    return NextResponse.json({ success: true, message: "Book removed from favorites." }, { status: 200 });
+    const result = NextResponse.json({ success: true, message: "Book removed from favorites." }, { status: 200 });
+    authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+    return result;
   } catch (error) {
     console.error("Error in /api/user-favorites/[bookId] (DELETE):", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

@@ -11,10 +11,14 @@ export async function POST(
   try {
     const { id } = await params;
     const { supabase, response } = createSupabaseRouteHandlerClient(req);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     // Check if user can edit the book
@@ -25,35 +29,37 @@ export async function POST(
       .single();
 
     if (bookError || !book) {
-      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+      return applyCookies(NextResponse.json({ error: "Book not found" }, { status: 404 }));
     }
 
     const canEdit = await canEditBookWithClient(supabase, book.user_id, book.is_public);
     if (!canEdit) {
-      return NextResponse.json({ error: "Unauthorized to update this book" }, { status: 403 });
+      return applyCookies(
+        NextResponse.json({ error: "Unauthorized to update this book" }, { status: 403 }),
+      );
     }
 
     const formData = await req.formData();
     const file = formData.get("cover") as File;
 
     if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      return applyCookies(NextResponse.json({ error: "No file provided" }, { status: 400 }));
     }
 
     // Validate file type
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ 
+      return applyCookies(NextResponse.json({ 
         error: "Invalid file type. Please upload a JPEG, PNG, or WebP image." 
-      }, { status: 400 });
+      }, { status: 400 }));
     }
 
     // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      return NextResponse.json({ 
+      return applyCookies(NextResponse.json({ 
         error: "File too large. Please upload an image smaller than 5MB." 
-      }, { status: 400 });
+      }, { status: 400 }));
     }
 
     // Generate unique filename
@@ -71,7 +77,9 @@ export async function POST(
 
     if (uploadError) {
       console.error("Failed to upload cover image:", uploadError);
-      return NextResponse.json({ error: "Failed to upload cover image" }, { status: 500 });
+      return applyCookies(
+        NextResponse.json({ error: "Failed to upload cover image" }, { status: 500 }),
+      );
     }
 
     // Get public URL
@@ -87,16 +95,18 @@ export async function POST(
 
     if (updateError) {
       console.error("Failed to update book cover:", updateError);
-      return NextResponse.json({ error: "Failed to update book cover" }, { status: 500 });
+      return applyCookies(
+        NextResponse.json({ error: "Failed to update book cover" }, { status: 500 }),
+      );
     }
 
-    return NextResponse.json({ 
+    return applyCookies(NextResponse.json({ 
       success: true, 
       coverUrl: publicUrl 
     }, { 
       status: 200,
       headers: response.headers 
-    });
+    }));
   } catch (error) {
     console.error("Error in /api/books/[id]/cover:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

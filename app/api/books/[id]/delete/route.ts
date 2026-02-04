@@ -10,10 +10,14 @@ export async function DELETE(
   try {
     const { id } = await params;
     const { supabase, response } = createSupabaseRouteHandlerClient(req);
+    const applyCookies = (res: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie));
+      return res;
+    };
     const user = await getSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applyCookies(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     // First, get the book to check permissions and get file URLs
@@ -24,12 +28,14 @@ export async function DELETE(
       .single();
 
     if (fetchError || !book) {
-      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+      return applyCookies(NextResponse.json({ error: "Book not found" }, { status: 404 }));
     }
 
     const canDelete = await canDeleteBookWithClient(supabase, book.user_id);
     if (!canDelete) {
-      return NextResponse.json({ error: "Unauthorized to delete this book" }, { status: 403 });
+      return applyCookies(
+        NextResponse.json({ error: "Unauthorized to delete this book" }, { status: 403 }),
+      );
     }
 
     // Delete associated files from storage
@@ -67,16 +73,16 @@ export async function DELETE(
 
     if (deleteError) {
       console.error("Error deleting book:", deleteError);
-      return NextResponse.json({ error: "Failed to delete book" }, { status: 500 });
+      return applyCookies(NextResponse.json({ error: "Failed to delete book" }, { status: 500 }));
     }
 
-    return NextResponse.json({ 
+    return applyCookies(NextResponse.json({ 
       success: true,
       message: "Book deleted successfully" 
     }, { 
       status: 200,
       headers: response.headers 
-    });
+    }));
   } catch (error) {
     console.error("Error in /api/books/[id]/delete:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

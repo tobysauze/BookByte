@@ -8,18 +8,22 @@ export async function POST(
   try {
     const { bookId } = await params;
     console.log("API: Marking book as read:", bookId);
-    const { supabase, response } = createSupabaseRouteHandlerClient(req);
+    const { supabase, response: authResponse } = createSupabaseRouteHandlerClient(req);
     
     // Get the current user from the Supabase client
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
       console.error("Error getting user:", userError);
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     // Ensure the book exists and is public
@@ -30,11 +34,15 @@ export async function POST(
       .single();
 
     if (bookError || !book) {
-      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+      const result = NextResponse.json({ error: "Book not found" }, { status: 404 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     if (!book.is_public) {
-      return NextResponse.json({ error: "Cannot mark a private book as read." }, { status: 403 });
+      const result = NextResponse.json({ error: "Cannot mark a private book as read." }, { status: 403 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     // Check if already marked as read
@@ -46,7 +54,9 @@ export async function POST(
       .single();
 
     if (existingEntry) {
-      return NextResponse.json({ success: true, message: "Book already marked as read." }, { status: 200 });
+      const result = NextResponse.json({ success: true, message: "Book already marked as read." }, { status: 200 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     // Mark as read
@@ -56,10 +66,14 @@ export async function POST(
 
     if (insertError) {
       console.error("Error marking book as read:", insertError);
-      return NextResponse.json({ error: "Failed to mark book as read." }, { status: 500 });
+      const result = NextResponse.json({ error: "Failed to mark book as read." }, { status: 500 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
-    return NextResponse.json({ success: true, message: "Book marked as read." }, { status: 200 });
+    const result = NextResponse.json({ success: true, message: "Book marked as read." }, { status: 200 });
+    authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+    return result;
   } catch (error) {
     console.error("Error in /api/user-read-books/[bookId] (POST):", error);
     return NextResponse.json({ 
@@ -75,18 +89,22 @@ export async function DELETE(
 ) {
   try {
     const { bookId } = await params;
-    const { supabase, response } = createSupabaseRouteHandlerClient(req);
+    const { supabase, response: authResponse } = createSupabaseRouteHandlerClient(req);
     
     // Get the current user from the Supabase client
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
       console.error("Error getting user:", userError);
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
     const { error: deleteError } = await supabase
@@ -97,10 +115,14 @@ export async function DELETE(
 
     if (deleteError) {
       console.error("Error removing book from read list:", deleteError);
-      return NextResponse.json({ error: "Failed to remove book from read list." }, { status: 500 });
+      const result = NextResponse.json({ error: "Failed to remove book from read list." }, { status: 500 });
+      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
     }
 
-    return NextResponse.json({ success: true, message: "Book removed from read list." }, { status: 200 });
+    const result = NextResponse.json({ success: true, message: "Book removed from read list." }, { status: 200 });
+    authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+    return result;
   } catch (error) {
     console.error("Error in /api/user-read-books/[bookId] (DELETE):", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

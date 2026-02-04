@@ -76,6 +76,100 @@ function buildFullSummaryChapters(summaryText: string): Array<{ title: string; s
   }));
 }
 
+function extractChapterBlocks(summaryText: string): Array<{ title: string; body: string }> {
+  const text = summaryText.replace(/\r\n/g, "\n").trim();
+  if (!text) return [];
+
+  const lines = text.split("\n");
+
+  const wordNumbers =
+    "(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)";
+
+  const headingRegexes: RegExp[] = [
+    // "Chapter 1: Title" / "CHAPTER 1 - Title"
+    new RegExp(`^\\s*(chapter|ch\\.)\\s+\\d+\\b.*$`, "i"),
+    // "Chapter One: Title"
+    new RegExp(`^\\s*(chapter|ch\\.)\\s+${wordNumbers}\\b.*$`, "i"),
+    // "Part 1: Title"
+    new RegExp(`^\\s*part\\s+\\d+\\b.*$`, "i"),
+    // "Part One: Title"
+    new RegExp(`^\\s*part\\s+${wordNumbers}\\b.*$`, "i"),
+  ];
+
+  const isHeadingLine = (line: string) => headingRegexes.some((re) => re.test(line));
+
+  const headingIndices: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]?.trim() ?? "";
+    if (!line) continue;
+    if (isHeadingLine(line)) headingIndices.push(i);
+  }
+
+  // Need at least 1 heading to segment. If none, return empty (caller will fall back).
+  if (headingIndices.length < 1) return [];
+
+  const blocks: Array<{ title: string; body: string }> = [];
+
+  // Preserve any intro text before the first detected heading.
+  const firstHeadingIndex = headingIndices[0]!;
+  if (firstHeadingIndex > 0) {
+    const introBody = lines.slice(0, firstHeadingIndex).join("\n").trim();
+    if (introBody) {
+      blocks.push({
+        title: "Introduction (pasted)",
+        body: introBody,
+      });
+    }
+  }
+
+  for (let h = 0; h < headingIndices.length; h++) {
+    const start = headingIndices[h]!;
+    const end = h + 1 < headingIndices.length ? headingIndices[h + 1]! : lines.length;
+
+    const title = (lines[start] ?? "").trim();
+    const body = lines
+      .slice(start + 1, end)
+      .join("\n")
+      .trim();
+
+    // Keep even short bodies, but never empty.
+    blocks.push({
+      title: title || `Chapter ${h + 1}`,
+      body: body || "Content not available for this chapter.",
+    });
+  }
+
+  return blocks;
+}
+
+function buildChapterTextChapters(summaryText: string): Array<{ title: string; summary: string }> {
+  // `chapterSummarySchema.summary` allows up to 100000 chars. Keep headroom.
+  const MAX_CHARS = 90000;
+  const blocks = extractChapterBlocks(summaryText);
+  if (blocks.length === 0) return [];
+
+  const chapters: Array<{ title: string; summary: string }> = [];
+  for (const block of blocks) {
+    const chunks = splitTextIntoChunks(block.body, MAX_CHARS);
+    if (chunks.length <= 1) {
+      chapters.push({
+        title: block.title,
+        summary: chunks[0] ?? block.body,
+      });
+      continue;
+    }
+
+    chunks.forEach((chunk, idx) => {
+      chapters.push({
+        title: `${block.title} — Part ${idx + 1}/${chunks.length}`,
+        summary: chunk,
+      });
+    });
+  }
+
+  return chapters;
+}
+
 /**
  * Parse and organize an uploaded summary text into structured format
  */
@@ -132,6 +226,11 @@ export async function POST(
 
     // Use AI to parse the summary text into structured format
     console.log("📝 Parsing uploaded summary text...");
+
+    // Lossless chapter capture:
+    // If the pasted text includes explicit "Chapter X" headings, store each chapter's full text
+    // directly into `chapters[].summary` (not a re-summarized version).
+    const chapterTextChapters = buildChapterTextChapters(summaryText);
     
     let parsedSummary: z.infer<typeof summarySchema> | null = null;
     try {
@@ -287,6 +386,12 @@ Return ONLY valid JSON matching this exact structure (no markdown formatting, no
       // Lossless: attach the full pasted summary text as additional chapter(s),
       // so nothing can be missing even if parsing is imperfect.
       const fullSummaryChapters = buildFullSummaryChapters(summaryText);
+      if (chapterTextChapters.length > 0) {
+        // Prefer verbatim chapter text extracted from headings.
+        parsedSummary.chapters = chapterTextChapters;
+      }
+
+      // Always include the full original pasted summary as its own selectable entry.
       if (fullSummaryChapters.length > 0) {
         parsedSummary.chapters = [...parsedSummary.chapters, ...fullSummaryChapters];
       }

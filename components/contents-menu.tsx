@@ -63,6 +63,16 @@ export function ContentsMenu({
   }
   
   const structuredSummary = summary;
+  const isFullPastedChapter = (title: string) =>
+    title.startsWith("Full Summary (pasted)");
+
+  const chapterItems = structuredSummary.chapters.map((chapter, index) => ({
+    chapter,
+    index,
+  }));
+
+  const normalChapters = chapterItems.filter(({ chapter }) => !isFullPastedChapter(chapter.title));
+  const fullPastedChapters = chapterItems.filter(({ chapter }) => isFullPastedChapter(chapter.title));
 
   const handleItemClick = (section: SummarySectionKey, index: number) => {
     onSectionChange(section);
@@ -143,13 +153,43 @@ export function ContentsMenu({
             )}
 
             {/* Chapters */}
-            {structuredSummary.chapters.length > 0 && (
+            {normalChapters.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
                   Chapters
                 </div>
                 <div className="space-y-1">
-                  {structuredSummary.chapters.map((chapter, index) => (
+                  {normalChapters.map(({ chapter, index }) => (
+                    <Button
+                      key={index}
+                      variant={currentSection === "chapters" && currentItemIndex === index ? "default" : "ghost"}
+                      className={`w-full justify-start h-auto p-2 text-left text-sm ${
+                        currentSection === "chapters" && currentItemIndex === index
+                          ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                          : "hover:bg-[rgb(var(--muted))]"
+                      }`}
+                      onClick={() => handleItemClick("chapters", index)}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <List className="h-3 w-3" />
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate">{chapter.title}</div>
+                        </div>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Full pasted summary (lossless) */}
+            {fullPastedChapters.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
+                  Full pasted summary
+                </div>
+                <div className="space-y-1">
+                  {fullPastedChapters.map(({ chapter, index }) => (
                     <Button
                       key={index}
                       variant={currentSection === "chapters" && currentItemIndex === index ? "default" : "ghost"}
