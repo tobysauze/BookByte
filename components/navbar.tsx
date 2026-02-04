@@ -49,6 +49,7 @@ const navLinks: NavbarLink[] = [
   { href: "/read", label: "Read", icon: CheckCircle, requiresAuth: true },
   { href: "/favorites", label: "Favorites", icon: Heart, requiresAuth: true },
   { href: "/highlights", label: "Highlights", icon: Highlighter, requiresAuth: true },
+  { href: "/notes", label: "Notes", icon: FileText, requiresAuth: true },
 ];
 
 type NavbarProps = {
