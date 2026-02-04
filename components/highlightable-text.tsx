@@ -120,8 +120,15 @@ export function HighlightableText({
     if (!selection || selection.rangeCount === 0) return;
 
     const range = selection.getRangeAt(0);
-    const { start, end, selected } = getOffsetsFromRange(range, textRef.current);
-    const selectedText = selected.trim();
+    let { start, end, selected } = getOffsetsFromRange(range, textRef.current);
+
+    // Keep offsets aligned with the trimmed text the user expects.
+    const leadingWhitespace = selected.match(/^\s*/)?.[0]?.length ?? 0;
+    const trailingWhitespace = selected.match(/\s*$/)?.[0]?.length ?? 0;
+    start += leadingWhitespace;
+    end -= trailingWhitespace;
+    selected = selected.trim();
+    const selectedText = selected;
 
     if (selectedText.length === 0) {
       setSelectedRange(null);
@@ -282,9 +289,6 @@ export function HighlightableText({
                 onClick={() => handleDeleteHighlight(part.highlightId!)}
               >
                 {part.text}
-                <span className="absolute -top-6 left-0 opacity-0 group-hover:opacity-100 bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                  Click to delete
-                </span>
               </mark>
             );
           }
