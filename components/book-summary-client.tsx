@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,9 @@ import { z } from "zod";
 import type { SupabaseSummary } from "@/lib/supabase";
 import type { SummaryPayload } from "@/lib/schemas";
 import { summarySchema } from "@/lib/schemas";
-import { HighlightableText } from "@/components/highlightable-text";
-import { useHighlights } from "@/lib/use-highlights"; // Keep this if used in main component, otherwise remove
 import { RawTextSummaryView } from "@/components/raw-text-summary-view";
+import { AudioPlayer } from "@/components/audio-player";
+import { toast } from "sonner";
 
 type BookSummaryClientProps = {
   book: SupabaseSummary;
@@ -32,27 +32,11 @@ function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof
 }
 
 export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientProps) {
-  const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<SummarySectionKey>("quick_summary");
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
-  const [isContentsOpen, setIsContentsOpen] = useState(false);
-  const [audioMap, setAudioMap] = useState<Record<string, string>>(
-    (book.audio_urls ?? {}) as Record<string, string>,
-  );
-
-  // Ensure summary is structured (should always be for book display)
+  // Wrapper: no hooks that depend on structured summary.
   if (!isStructuredSummary(book.summary)) {
-    // Check if it's a raw text summary
-    if (book.summary && typeof book.summary === 'object' && 'raw_text' in book.summary) {
+    if (book.summary && typeof book.summary === "object" && "raw_text" in book.summary) {
       const rawText = (book.summary as { raw_text: string }).raw_text;
-      // Hook must be called unconditionally, but since we are conditionally returning, we need to extract this component or use it at top level.
-      // Refactoring to use a sub-component for RawTextSummary to respect rules of hooks would be cleaner,
-      // but to keep it simple within this file structure, I'll extract the hook usage to a sub-component or modify the flow.
-      // Actually, let's just create a small internal component for the RawText view to handle its own hooks.
-
-      return (
-        <RawTextSummaryView bookId={book.id} content={rawText} />
-      );
+      return <RawTextSummaryView bookId={book.id} content={rawText} />;
     }
 
     return (
@@ -62,6 +46,19 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
       </div>
     );
   }
+
+  return <StructuredBookSummaryClient book={book} canEdit={canEdit} />;
+}
+
+function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<SummarySectionKey>("quick_summary");
+  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [isContentsOpen, setIsContentsOpen] = useState(false);
+  const [audioMap, setAudioMap] = useState<Record<string, string>>(
+    (book.audio_urls ?? {}) as Record<string, string>,
+  );
+  const [isAudioVisible, setIsAudioVisible] = useState(true);
 
   const structuredSummary = book.summary as z.infer<typeof summarySchema>;
   const [isGenerating, setIsGenerating] = useState(false);
@@ -79,7 +76,6 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
   useEffect(() => {
     const section = searchParams.get("section");
     const itemIndex = searchParams.get("itemIndex");
-    const highlightId = searchParams.get("highlightId");
 
     if (section && ["quick_summary", "key_ideas", "chapters", "actionable_insights", "quotes"].includes(section)) {
       setActiveTab(section as SummarySectionKey);
@@ -174,16 +170,28 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
       });
 
       if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Failed to generate audio.");
+        let message = "Failed to generate audio.";
+        try {
+          const data = (await response.json()) as { error?: string };
+          if (typeof data?.error === "string" && data.error.length > 0) {
+            message = data.error;
+          }
+        } catch {
+          const text = await response.text().catch(() => "");
+          if (text) message = text;
+        }
+        throw new Error(message);
       }
 
-      const { audioUrl } = (await response.json()) as { audioUrl: string };
+      const { audioUrl, cached } = (await response.json()) as { audioUrl: string; cached?: boolean };
       setAudioMap((prev) => ({ ...prev, [section]: audioUrl }));
+      setIsAudioVisible(true);
+      toast.success(cached ? "Audio ready (cached)" : "Audio ready");
       return audioUrl;
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Unknown error");
+      toast.error(err instanceof Error ? err.message : "Failed to generate audio");
       return undefined;
     } finally {
       setIsGenerating(false);
@@ -207,8 +215,6 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
   const ITEMS_PER_PAGE = 5;
 
   const handlePrevious = () => {
-    const currentSectionItems = getSectionItems(activeTab);
-
     if (activeTab === "quick_summary") {
       // Go to last page of previous section
       if (structuredSummary.quotes.length > 0) {
@@ -271,7 +277,6 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
 
     // Calculate current page and next page
     const currentPage = Math.floor(currentItemIndex / ITEMS_PER_PAGE);
-    const totalPages = Math.ceil(currentSectionItems.length / ITEMS_PER_PAGE);
     const nextPageIndex = (currentPage + 1) * ITEMS_PER_PAGE;
 
     if (nextPageIndex < currentSectionItems.length) {
@@ -398,6 +403,26 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
             )}
           </div>
         </div>
+
+        {/* Floating audio player (appears after generation) */}
+        {isAudioVisible && audioMap[activeTab] ? (
+          <div className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-xs text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]"
+                onClick={() => setIsAudioVisible(false)}
+              >
+                Hide
+              </button>
+            </div>
+            <AudioPlayer
+              src={audioMap[activeTab]}
+              title="Narration"
+              autoPlay
+            />
+          </div>
+        ) : null}
 
         {/* Contents Menu - Only show if not raw text */}
         <ContentsMenu
