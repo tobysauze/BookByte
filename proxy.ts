@@ -20,11 +20,9 @@ const SUPABASE_ANON_KEY = getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
  */
 export async function proxy(request: NextRequest) {
   // Create a response we can attach refreshed cookies to.
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  // Also keep the request cookies in sync so Server Components don't attempt
+  // to refresh the same session again within this request.
+  const response = NextResponse.next({ request });
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
@@ -36,14 +34,21 @@ export async function proxy(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
+          // Keep request cookies in sync for the remainder of this request.
+          try {
+            request.cookies.set({ name, value, ...options });
+          } catch {
+            // Some runtimes may not allow mutating request cookies.
+          }
           response.cookies.set({ name, value, ...options });
         });
       },
     },
   });
 
-  // Triggers token refresh when needed.
-  await supabase.auth.getUser();
+  // Validate + refresh tokens when needed.
+  // Supabase recommends getClaims() for SSR protection and refresh.
+  await supabase.auth.getClaims();
 
   return response;
 }
