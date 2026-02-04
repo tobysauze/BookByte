@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
-import { summarySchema } from "@/lib/schemas";
+import { rawTextSummarySchema, summarySchema } from "@/lib/schemas";
 import { canEditBook } from "@/lib/user-roles";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -201,6 +201,18 @@ export async function POST(
       );
     }
 
+    // If the user pasted an already-structured deep-dive (PART 1..8), keep it lossless as raw_text.
+    // This avoids the AI "re-organizing" and accidentally dropping sections.
+    const looksLikeDeepDivePromptOutput = (() => {
+      const t = summaryText.toLowerCase();
+      return (
+        /\bpart\s+1\s*:/i.test(t) &&
+        /\bpart\s+2\s*:/i.test(t) &&
+        /\bpart\s+8\s*:/i.test(t) &&
+        (t.includes("chapter-by-chapter") || t.includes("chapter by chapter"))
+      );
+    })();
+
     // Get the book
     const { data: book, error: bookError } = await supabase
       .from("books")
@@ -222,6 +234,42 @@ export async function POST(
         { error: "You don't have permission to edit this book." },
         { status: 403 },
       );
+    }
+
+    if (looksLikeDeepDivePromptOutput) {
+      const raw = rawTextSummarySchema.parse({
+        raw_text: summaryText.trim(),
+        ai_provider: "pasted_deep_dive",
+      });
+
+      const metadata = calculateBookMetadata(raw);
+      const { error: updateError } = await supabase
+        .from("books")
+        .update({
+          summary: raw,
+          ...metadata,
+        })
+        .eq("id", id);
+
+      if (updateError) {
+        console.error("Error updating book summary:", updateError);
+        return NextResponse.json(
+          { error: "Failed to save summary." },
+          { status: 500 },
+        );
+      }
+
+      const result = NextResponse.json({
+        success: true,
+        message: "Summary uploaded successfully.",
+        summary: raw,
+      });
+
+      authResponse.cookies.getAll().forEach((cookie) => {
+        result.cookies.set(cookie);
+      });
+
+      return result;
     }
 
     // Use AI to parse the summary text into structured format

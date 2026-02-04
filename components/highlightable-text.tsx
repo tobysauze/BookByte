@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Highlighter, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { SummaryText } from "@/components/summary-text";
 
 type Highlight = {
@@ -43,6 +42,11 @@ type HighlightableTextProps = {
   onHighlightCreated?: () => void;
   onHighlightDeleted?: () => void;
   className?: string;
+  /**
+   * Optional ref to access the underlying text container DOM element.
+   * Useful for features like scroll-to-offset or a table-of-contents.
+   */
+  containerRef?: React.MutableRefObject<HTMLDivElement | null>;
 };
 
 export function HighlightableText({
@@ -54,14 +58,20 @@ export function HighlightableText({
   onHighlightCreated,
   onHighlightDeleted,
   className = "",
+  containerRef,
 }: HighlightableTextProps) {
-  const [isSelecting, setIsSelecting] = useState(false);
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number; text: string } | null>(null);
   const [selectedColor, setSelectedColor] = useState<string>("yellow");
   const [buttonPosition, setButtonPosition] = useState<{ top: number; left: number } | null>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    if (containerRef) {
+      containerRef.current = textRef.current;
+    }
+  }, [containerRef]);
 
   // Filter highlights for this specific section and item
   const relevantHighlights = highlights.filter(
@@ -79,7 +89,6 @@ export function HighlightableText({
         !textRef.current.contains(event.target as Node)
       ) {
         setSelectedRange(null);
-        setIsSelecting(false);
         setButtonPosition(null);
         window.getSelection()?.removeAllRanges();
       }
@@ -103,7 +112,6 @@ export function HighlightableText({
     const selectedText = selection.toString().trim();
 
     if (selectedText.length === 0) {
-      setIsSelecting(false);
       setSelectedRange(null);
       setButtonPosition(null);
       return;
@@ -111,7 +119,6 @@ export function HighlightableText({
 
     // Check if selection is within our text element
     if (!textRef.current.contains(range.commonAncestorContainer)) {
-      setIsSelecting(false);
       setSelectedRange(null);
       setButtonPosition(null);
       return;
@@ -132,7 +139,6 @@ export function HighlightableText({
     const endOffset = startOffset + selectedText.length;
 
     if (startOffset >= 0) {
-      setIsSelecting(true);
       setSelectedRange({
         start: startOffset,
         end: endOffset,
@@ -153,7 +159,6 @@ export function HighlightableText({
         top: positionAbove ? top - buttonHeight - 5 : top + rect.height + 5,
       });
     } else {
-      setIsSelecting(false);
       setSelectedRange(null);
       setButtonPosition(null);
     }
@@ -188,7 +193,6 @@ export function HighlightableText({
 
       toast.success("Highlight created!");
       setSelectedRange(null);
-      setIsSelecting(false);
       setButtonPosition(null);
       window.getSelection()?.removeAllRanges();
       onHighlightCreated?.();
@@ -326,7 +330,6 @@ export function HighlightableText({
               variant="ghost"
               onClick={() => {
                 setSelectedRange(null);
-                setIsSelecting(false);
                 setButtonPosition(null);
                 window.getSelection()?.removeAllRanges();
               }}
