@@ -102,6 +102,17 @@ export function HighlightableText({
     }
   }, [selectedRange]);
 
+  const getOffsetsFromRange = (range: Range, root: HTMLElement) => {
+    // Compute absolute offsets based on the actual DOM selection, not indexOf(selectedText).
+    const pre = range.cloneRange();
+    pre.selectNodeContents(root);
+    pre.setEnd(range.startContainer, range.startOffset);
+    const start = pre.toString().length;
+    const selected = range.toString();
+    const end = start + selected.length;
+    return { start, end, selected };
+  };
+
   const handleMouseUp = useCallback(() => {
     if (!textRef.current) return;
 
@@ -109,7 +120,8 @@ export function HighlightableText({
     if (!selection || selection.rangeCount === 0) return;
 
     const range = selection.getRangeAt(0);
-    const selectedText = selection.toString().trim();
+    const { start, end, selected } = getOffsetsFromRange(range, textRef.current);
+    const selectedText = selected.trim();
 
     if (selectedText.length === 0) {
       setSelectedRange(null);
@@ -133,15 +145,14 @@ export function HighlightableText({
     const left = rect.left - containerRect.left + rect.width / 2;
     const top = rect.top - containerRect.top;
 
-    // Calculate offsets relative to the text content
-    const textContent = textRef.current.textContent || "";
-    const startOffset = textContent.indexOf(selectedText);
-    const endOffset = startOffset + selectedText.length;
+    // Clamp offsets within the provided text, in case of any mismatch.
+    const clampedStart = Math.max(0, Math.min(start, text.length));
+    const clampedEnd = Math.max(clampedStart, Math.min(end, text.length));
 
-    if (startOffset >= 0) {
+    if (clampedEnd > clampedStart) {
       setSelectedRange({
-        start: startOffset,
-        end: endOffset,
+        start: clampedStart,
+        end: clampedEnd,
         text: selectedText,
       });
       
@@ -162,7 +173,7 @@ export function HighlightableText({
       setSelectedRange(null);
       setButtonPosition(null);
     }
-  }, []);
+  }, [text.length]);
 
   const handleCreateHighlight = async () => {
     if (!selectedRange) return;
