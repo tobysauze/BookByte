@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export default function CreateBookPage() {
   const router = useRouter();
@@ -17,15 +16,14 @@ export default function CreateBookPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-
   // Check if user is logged in
   useEffect(() => {
     const checkUser = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const response = await fetch("/api/me");
+        const data = (await response.json().catch(() => ({}))) as { user?: unknown | null };
 
-        if (!user) {
+        if (!data?.user) {
           router.push("/login");
           return;
         }
@@ -38,7 +36,7 @@ export default function CreateBookPage() {
     };
 
     checkUser();
-  }, [router, supabase]);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

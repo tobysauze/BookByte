@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
@@ -31,7 +31,6 @@ import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import Image from "next/image";
 
 type UserRole = "editor" | "regular" | null;
@@ -60,7 +59,6 @@ export function Navbar({ initialUser }: NavbarProps) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(initialUser);
   const [userRole, setUserRole] = useState<UserRole>(null);
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   // Fetch user role when user changes
   useEffect(() => {
@@ -71,13 +69,9 @@ export function Navbar({ initialUser }: NavbarProps) {
       }
 
       try {
-        const { data: profile } = await supabase
-          .from("user_profiles")
-          .select("is_editor")
-          .eq("id", user.id)
-          .single();
-
-        setUserRole(profile?.is_editor ? "editor" : "regular");
+        const response = await fetch("/api/me");
+        const data = (await response.json().catch(() => ({}))) as { role?: UserRole };
+        setUserRole(data?.role ?? "regular");
       } catch (error) {
         console.error("Error fetching user role:", error);
         setUserRole("regular"); // Default to regular user
@@ -85,36 +79,36 @@ export function Navbar({ initialUser }: NavbarProps) {
     };
 
     fetchUserRole();
-  }, [user, supabase]);
+  }, [user]);
 
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null);
-
+    // Keep navbar state in sync with cookie-based auth.
+    // After login/logout we navigate + refresh, but this keeps things resilient.
+    const sync = async () => {
       try {
-        await fetch("/api/auth/callback", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event,
-            // Only send what the server needs to set cookies.
-            session: session
-              ? {
-                  access_token: session.access_token,
-                  refresh_token: session.refresh_token,
-                }
-              : null,
-          }),
-        });
-      } catch (error) {
-        console.error("Failed to sync auth session", error);
+        const response = await fetch("/api/me");
+        const data = (await response.json().catch(() => ({}))) as {
+          user?: { id: string; email?: string | null } | null;
+          role?: UserRole | null;
+        };
+        setUser(
+          data?.user
+            ? ({
+                id: data.user.id,
+                email: data.user.email ?? undefined,
+              } as unknown as User)
+            : null,
+        );
+        setUserRole(data?.role ?? null);
+      } catch {
+        // Ignore
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
-  }, [supabase]);
+    void sync();
+    const interval = window.setInterval(sync, 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const filteredLinks = navLinks.filter((link) =>
     link.requiresAuth ? Boolean(user) : true,
@@ -196,7 +190,8 @@ export function Navbar({ initialUser }: NavbarProps) {
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    await supabase.auth.signOut();
+                    await fetch("/api/auth/logout", { method: "POST" });
+                    window.location.href = "/login";
                   }}
                   className="flex"
                 >
@@ -290,7 +285,8 @@ export function Navbar({ initialUser }: NavbarProps) {
                           className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                           size="sm"
                           onClick={async () => {
-                            await supabase.auth.signOut();
+                            await fetch("/api/auth/logout", { method: "POST" });
+                            window.location.href = "/login";
                           }}
                         >
                           <LogOut className="mr-2 h-4 w-4" />

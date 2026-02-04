@@ -7,11 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export function AuthForm() {
   const router = useRouter();
-  const supabase = createSupabaseBrowserClient();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,20 +23,25 @@ export function AuthForm() {
 
     try {
       if (mode === "login") {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
         });
-        if (signInError) throw signInError;
+        if (!response.ok) {
+          const data = (await response.json().catch(() => ({}))) as { error?: string };
+          throw new Error(data?.error || "Login failed");
+        }
       } else {
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/library`,
-          },
+        const response = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
         });
-        if (signUpError) throw signUpError;
+        if (!response.ok) {
+          const data = (await response.json().catch(() => ({}))) as { error?: string };
+          throw new Error(data?.error || "Signup failed");
+        }
       }
 
       router.push("/library");

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type SummaryRatingProps = {
   bookId: string;
@@ -30,12 +29,9 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
   useEffect(() => {
     const loadRating = async () => {
       try {
-        const supabase = createSupabaseBrowserClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) return;
+        const meRes = await fetch("/api/me");
+        const me = (await meRes.json().catch(() => ({}))) as { user?: unknown | null };
+        if (!me?.user) return;
 
         const response = await fetch(`/api/books/${bookId}/rating`);
         if (response.ok) {
