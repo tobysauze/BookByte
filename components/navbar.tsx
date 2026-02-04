@@ -97,7 +97,16 @@ export function Navbar({ initialUser }: NavbarProps) {
         await fetch("/api/auth/callback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event, session }),
+          body: JSON.stringify({
+            event,
+            // Only send what the server needs to set cookies.
+            session: session
+              ? {
+                  access_token: session.access_token,
+                  refresh_token: session.refresh_token,
+                }
+              : null,
+          }),
         });
       } catch (error) {
         console.error("Failed to sync auth session", error);

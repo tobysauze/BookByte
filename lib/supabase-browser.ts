@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 export const createSupabaseBrowserClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,6 +10,14 @@ export const createSupabaseBrowserClient = () => {
     );
   }
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  // Use the standard browser client so sessions persist reliably (localStorage)
+  // across navigations and deployments. SSR cookie sync is handled separately.
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
 };
 
