@@ -22,11 +22,17 @@ const SECTION_LABELS: Record<SummarySectionKey, string> = {
   ai_provider: "AI Provider",
 };
 
+function narrationKey(params: { voiceId: string; modelId: string; section: string }) {
+  return `voice:${params.voiceId}|model:${params.modelId}|section:${params.section}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { bookId, section } = (await request.json()) as {
+    const { bookId, section, voiceId, modelId } = (await request.json()) as {
       bookId?: string;
       section?: string;
+      voiceId?: string;
+      modelId?: string;
     };
 
     if (!bookId || !section) {
@@ -54,9 +60,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Must be able to SELECT the book (RLS: owner or public).
     const { data: book, error } = await supabase
       .from("books")
-      .select("id, user_id, title, summary, audio_urls")
+      .select("id, user_id, title, summary, audio_urls, is_public")
       .eq("id", bookId)
       .maybeSingle();
 
@@ -68,18 +75,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (book.user_id !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const adminClient = getSupabaseAdminClient();
+
+    const resolvedVoiceId = voiceId ?? process.env.ELEVENLABS_VOICE_ID ?? "21m00Tcm4TlvDq8ikWAM";
+    const resolvedModelId = modelId ?? process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
+
+    // Check shared narration cache first.
+    const { data: cached } = await supabase
+      .from("book_audio_narrations")
+      .select("audio_url")
+      .eq("book_id", book.id)
+      .eq("section", sectionKey)
+      .eq("voice_id", resolvedVoiceId)
+      .eq("model_id", resolvedModelId)
+      .maybeSingle();
+
+    if (cached?.audio_url) {
+      const result = NextResponse.json({ audioUrl: cached.audio_url, cached: true });
+      authResponse.cookies.getAll().forEach((cookie) => {
+        result.cookies.set(cookie);
+      });
+      return result;
     }
 
     const sectionText = extractSectionText(book.summary as SummaryPayload, sectionKey);
 
     const audioBuffer = await generateSpeechFromText({
       text: sectionText,
+      voiceId: resolvedVoiceId,
+      modelId: resolvedModelId,
     });
 
-    const adminClient = getSupabaseAdminClient();
-    const path = `${book.id}/${sectionKey}.mp3`;
+    const path = `narrations/${book.id}/${resolvedVoiceId}/${resolvedModelId}/${sectionKey}.mp3`;
     const { error: uploadError } = await adminClient.storage
       .from("audio")
       .upload(path, audioBuffer, {
@@ -96,20 +123,44 @@ export async function POST(request: NextRequest) {
       data: { publicUrl },
     } = adminClient.storage.from("audio").getPublicUrl(path);
 
+    // Save into shared narration cache (dedup by book+section+voice+model).
+    await adminClient
+      .from("book_audio_narrations")
+      .upsert(
+        {
+          book_id: book.id,
+          section: sectionKey,
+          voice_id: resolvedVoiceId,
+          model_id: resolvedModelId,
+          audio_url: publicUrl,
+          created_by: user.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "book_id,section,voice_id,model_id" },
+      );
+
+    // Back-compat: keep books.audio_urls populated.
+    // Store a voice/model-specific key so multiple voices can coexist.
     const updatedAudioUrls = {
       ...(book.audio_urls ?? {}),
-      [sectionKey]: publicUrl,
-    } as Partial<Record<SummarySectionKey, string>>;
+      [narrationKey({ voiceId: resolvedVoiceId, modelId: resolvedModelId, section: sectionKey })]: publicUrl,
+    } as Record<string, string>;
+
+    // Also store sectionKey -> url for the default configured voice/model (so existing UI continues to work).
+    const isDefaultVoice =
+      resolvedVoiceId === (process.env.ELEVENLABS_VOICE_ID ?? "21m00Tcm4TlvDq8ikWAM") &&
+      resolvedModelId === (process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2");
+    if (isDefaultVoice) {
+      updatedAudioUrls[sectionKey] = publicUrl;
+    }
+
     const { error: updateError } = await adminClient
       .from("books")
       .update({ audio_urls: updatedAudioUrls })
       .eq("id", book.id);
+    if (updateError) console.error(updateError);
 
-    if (updateError) {
-      console.error(updateError);
-    }
-
-    const result = NextResponse.json({ audioUrl: publicUrl });
+    const result = NextResponse.json({ audioUrl: publicUrl, cached: false });
     authResponse.cookies.getAll().forEach((cookie) => {
       result.cookies.set(cookie);
     });
@@ -124,11 +175,21 @@ export async function POST(request: NextRequest) {
 }
 
 function extractSectionText(summary: SummaryPayload, section: SummarySectionKey): string {
-  // Type guard to ensure summary is structured
-  if (!('quick_summary' in summary) || typeof summary.quick_summary !== 'string') {
-    throw new Error("Cannot extract section text from raw text summary");
+  // Raw text fallback
+  const isRawText =
+    summary &&
+    typeof summary === "object" &&
+    "raw_text" in summary &&
+    typeof (summary as Record<string, unknown>).raw_text === "string";
+  if (isRawText) {
+    return (summary as { raw_text: string }).raw_text;
   }
-  
+
+  // Type guard to ensure summary is structured
+  if (!("quick_summary" in summary) || typeof (summary as any).quick_summary !== "string") {
+    throw new Error("Cannot extract section text from this summary format");
+  }
+
   const structuredSummary = summary as z.infer<typeof summarySchema>;
   
   switch (section) {
