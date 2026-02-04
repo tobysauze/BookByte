@@ -12,12 +12,13 @@ import { summarySchema } from "@/lib/schemas";
 
 // Only use structured summary keys (not raw_text variant)
 type SummarySectionKey = keyof z.infer<typeof summarySchema>;
+type NarrationSectionKey = SummarySectionKey | "full_summary";
 
 type VerticalSummaryNavProps = {
   summary: SummaryPayload;
   activeTab: SummarySectionKey;
   onTabChange: (tab: SummarySectionKey) => void;
-  onGenerateAudio?: (section: SummarySectionKey) => Promise<string | void> | string | void;
+  onGenerateAudio?: (section: NarrationSectionKey) => Promise<string | void> | string | void;
   isGenerating?: boolean;
   onContentsClick?: () => void;
 };
@@ -172,7 +173,7 @@ export function VerticalSummaryNav({
                 variant="secondary"
                 size="sm"
                 disabled={Boolean(isGenerating)}
-                onClick={() => onGenerateAudio(activeTab)}
+                onClick={() => onGenerateAudio("full_summary")}
                 className="w-full"
               >
                 <Headphones className="h-4 w-4 mr-2" />

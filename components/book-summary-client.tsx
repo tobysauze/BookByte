@@ -25,6 +25,7 @@ type BookSummaryClientProps = {
 
 // Only use structured summary keys (not raw_text variant)
 type SummarySectionKey = keyof z.infer<typeof summarySchema>;
+type NarrationSectionKey = SummarySectionKey | "full_summary";
 
 // Type guard for structured summaries
 function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
@@ -55,10 +56,17 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
   const [activeTab, setActiveTab] = useState<SummarySectionKey>("quick_summary");
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [isContentsOpen, setIsContentsOpen] = useState(false);
-  const [audioMap, setAudioMap] = useState<Record<string, string>>(
+  const [, setAudioMap] = useState<Record<string, string>>(
     (book.audio_urls ?? {}) as Record<string, string>,
   );
   const [isAudioVisible, setIsAudioVisible] = useState(true);
+  const [currentAudio, setCurrentAudio] = useState<{ src: string; title: string } | null>(() => {
+    const src = (book.audio_urls ?? {}) as Record<string, string>;
+    if (typeof src.full_summary === "string" && src.full_summary.length > 0) {
+      return { src: src.full_summary, title: "Full Summary narration" };
+    }
+    return null;
+  });
 
   const structuredSummary = book.summary as z.infer<typeof summarySchema>;
   const [isGenerating, setIsGenerating] = useState(false);
@@ -156,7 +164,7 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
     };
   }, [activeTab, currentItemIndex, searchParams]);
 
-  const handleGenerateAudio = async (section: SummarySectionKey) => {
+  const handleGenerateAudio = async (section: NarrationSectionKey) => {
     setError(null);
     try {
       setIsGenerating(true);
@@ -186,6 +194,10 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
       const { audioUrl, cached } = (await response.json()) as { audioUrl: string; cached?: boolean };
       setAudioMap((prev) => ({ ...prev, [section]: audioUrl }));
       setIsAudioVisible(true);
+      setCurrentAudio({
+        src: audioUrl,
+        title: section === "full_summary" ? "Full Summary narration" : "Narration",
+      });
       toast.success(cached ? "Audio ready (cached)" : "Audio ready");
       return audioUrl;
     } catch (err) {
@@ -405,7 +417,7 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
         </div>
 
         {/* Floating audio player (appears after generation) */}
-        {isAudioVisible && audioMap[activeTab] ? (
+        {isAudioVisible && currentAudio?.src ? (
           <div className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
             <div className="mb-2 flex justify-end">
               <button
@@ -417,8 +429,8 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
               </button>
             </div>
             <AudioPlayer
-              src={audioMap[activeTab]}
-              title="Narration"
+              src={currentAudio.src}
+              title={currentAudio.title}
               autoPlay
             />
           </div>

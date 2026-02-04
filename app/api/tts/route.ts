@@ -11,10 +11,12 @@ export const runtime = "nodejs";
 
 // Only use structured summary keys (not raw_text variant)
 type SummarySectionKey = keyof z.infer<typeof summarySchema>;
+type NarrationSectionKey = SummarySectionKey | "full_summary";
 
-const SECTION_LABELS: Record<SummarySectionKey, string> = {
+const SECTION_LABELS: Record<NarrationSectionKey, string> = {
   quick_summary: "Quick Summary",
   short_summary: "Short Summary",
+  full_summary: "Full Summary",
   key_ideas: "Key Ideas",
   chapters: "Chapters",
   actionable_insights: "Insights",
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid section" }, { status: 400 });
     }
 
-    const sectionKey = section as SummarySectionKey;
+    const sectionKey = section as NarrationSectionKey;
 
     const { supabase, response: authResponse } = createSupabaseRouteHandlerClient(request);
     const {
@@ -98,9 +100,8 @@ export async function POST(request: NextRequest) {
       return result;
     }
 
-    const sectionText = extractSectionText(book.summary as SummaryPayload, sectionKey);
-
-    const audioBuffer = await generateSpeechFromText({
+    const sectionText = extractSectionText(book.summary as SummaryPayload, sectionKey, book.title ?? undefined);
+    const audioBuffer = await generateLongSpeechFromText({
       text: sectionText,
       voiceId: resolvedVoiceId,
       modelId: resolvedModelId,
@@ -174,7 +175,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function extractSectionText(summary: SummaryPayload, section: SummarySectionKey): string {
+function extractSectionText(
+  summary: SummaryPayload,
+  section: NarrationSectionKey,
+  bookTitle?: string,
+): string {
   // Raw text fallback
   const isRawText =
     summary &&
@@ -191,12 +196,53 @@ function extractSectionText(summary: SummaryPayload, section: SummarySectionKey)
   }
 
   const structuredSummary = summary as z.infer<typeof summarySchema>;
-  
+
   switch (section) {
     case "quick_summary":
       return structuredSummary.quick_summary;
     case "short_summary":
       return structuredSummary.short_summary;
+    case "full_summary": {
+      const parts: string[] = [];
+      if (bookTitle) parts.push(`Title: ${bookTitle}`);
+
+      parts.push(`Quick Summary\n${structuredSummary.quick_summary}`);
+      parts.push(`Short Summary\n${structuredSummary.short_summary}`);
+
+      if (structuredSummary.key_ideas?.length) {
+        parts.push(
+          `Key Ideas\n${structuredSummary.key_ideas
+            .map((idea, idx) => `${idx + 1}. ${idea.title}. ${idea.text}`)
+            .join("\n")}`,
+        );
+      }
+
+      if (structuredSummary.chapters?.length) {
+        parts.push(
+          `Chapters\n${structuredSummary.chapters
+            .map((chapter, idx) => `${idx + 1}. ${chapter.title}\n${chapter.summary}`)
+            .join("\n\n")}`,
+        );
+      }
+
+      if (structuredSummary.actionable_insights?.length) {
+        parts.push(
+          `Insights\n${structuredSummary.actionable_insights
+            .map((insight, idx) => `${idx + 1}. ${insight}`)
+            .join("\n")}`,
+        );
+      }
+
+      if (structuredSummary.quotes?.length) {
+        parts.push(
+          `Quotes\n${structuredSummary.quotes
+            .map((q, idx) => `${idx + 1}. ${q}`)
+            .join("\n")}`,
+        );
+      }
+
+      return parts.join("\n\n");
+    }
     case "key_ideas":
       return structuredSummary.key_ideas
         .map((idea) => `${idea.title}: ${idea.text}`)
@@ -214,5 +260,87 @@ function extractSectionText(summary: SummaryPayload, section: SummarySectionKey)
     default:
       return JSON.stringify(summary);
   }
+}
+
+function splitTextForTts(text: string, maxChars: number): string[] {
+  const cleaned = text.replace(/\r\n/g, "\n").trim();
+  if (cleaned.length <= maxChars) return [cleaned];
+
+  const paragraphs = cleaned.split(/\n{2,}/g).map((p) => p.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+
+  const pushCurrent = () => {
+    const c = current.trim();
+    if (c) chunks.push(c);
+    current = "";
+  };
+
+  for (const para of paragraphs) {
+    if (!current) {
+      if (para.length <= maxChars) {
+        current = para;
+        continue;
+      }
+
+      // Paragraph itself too large: split by sentences, then hard-slice.
+      const sentences = para.split(/(?<=[.!?])\s+/g);
+      let buf = "";
+      for (const s of sentences) {
+        if (!buf) {
+          if (s.length <= maxChars) {
+            buf = s;
+          } else {
+            for (let i = 0; i < s.length; i += maxChars) {
+              chunks.push(s.slice(i, i + maxChars).trim());
+            }
+          }
+          continue;
+        }
+
+        if (buf.length + 1 + s.length <= maxChars) {
+          buf = `${buf} ${s}`;
+        } else {
+          chunks.push(buf.trim());
+          buf = s;
+        }
+      }
+      if (buf.trim()) chunks.push(buf.trim());
+      continue;
+    }
+
+    if (current.length + 2 + para.length <= maxChars) {
+      current = `${current}\n\n${para}`;
+    } else {
+      pushCurrent();
+      current = para;
+    }
+  }
+
+  pushCurrent();
+  return chunks;
+}
+
+async function generateLongSpeechFromText(params: {
+  text: string;
+  voiceId: string;
+  modelId: string;
+}) {
+  // ElevenLabs has request-size limits; chunk conservatively and concatenate MP3 frames.
+  const MAX_CHARS = 4500;
+  const chunks = splitTextForTts(params.text, MAX_CHARS);
+  const buffers: Buffer[] = [];
+
+  for (const chunk of chunks) {
+    const buf = await generateSpeechFromText({
+      text: chunk,
+      voiceId: params.voiceId,
+      modelId: params.modelId,
+      outputFormat: "mp3_44100_128",
+    });
+    buffers.push(buf);
+  }
+
+  return Buffer.concat(buffers);
 }
 
