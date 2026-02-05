@@ -154,6 +154,36 @@ export function Navbar({ initialUser }: NavbarProps) {
         <div className="flex items-center gap-2 flex-shrink-0 ml-auto min-w-0 overflow-hidden">
           <ThemeToggle />
 
+          {/* Always-visible auth action on mobile */}
+          {user ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden h-9 w-9"
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                window.location.href = "/login";
+              }}
+              aria-label="Logout"
+              title="Logout"
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
+          ) : (
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="md:hidden h-9 w-9"
+              aria-label="Login"
+              title="Login"
+            >
+              <Link href="/login">
+                <LogIn className="h-5 w-5" />
+              </Link>
+            </Button>
+          )}
+
           <div className="hidden md:flex items-center gap-2">
             {user ? (
               <>
