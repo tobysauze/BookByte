@@ -191,15 +191,41 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
         throw new Error(message);
       }
 
-      const { audioUrl, cached } = (await response.json()) as { audioUrl: string; cached?: boolean };
-      setAudioMap((prev) => ({ ...prev, [section]: audioUrl }));
-      setIsAudioVisible(true);
-      setCurrentAudio({
-        src: audioUrl,
-        title: section === "full_summary" ? "Full Summary narration" : "Narration",
-      });
-      toast.success(cached ? "Audio ready (cached)" : "Audio ready");
-      return audioUrl;
+      const data = (await response.json()) as {
+        audioUrl: string | null;
+        cached?: boolean;
+        fallback?: "speechSynthesis";
+        fallbackText?: string;
+      };
+
+      if (data.audioUrl) {
+        setAudioMap((prev) => ({ ...prev, [section]: data.audioUrl! }));
+        setIsAudioVisible(true);
+        setCurrentAudio({
+          src: data.audioUrl,
+          title: section === "full_summary" ? "Full Summary narration" : "Narration",
+        });
+        toast.success(data.cached ? "Audio ready (cached)" : "Audio ready");
+        return data.audioUrl;
+      }
+
+      if (data.fallback === "speechSynthesis" && typeof data.fallbackText === "string") {
+        // Free backup: use device TTS (not cached).
+        try {
+          if (typeof window !== "undefined" && "speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(data.fallbackText);
+            utterance.rate = 1.0;
+            window.speechSynthesis.speak(utterance);
+            toast.message("Using device text-to-speech (fallback)");
+            return undefined;
+          }
+        } catch (e) {
+          console.error("SpeechSynthesis fallback failed:", e);
+        }
+      }
+
+      throw new Error("Failed to generate audio.");
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Unknown error");

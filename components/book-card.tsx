@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Bookmark, Headphones, Play } from "lucide-react";
@@ -9,10 +10,18 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { DeleteBookButton } from "@/components/delete-book-button";
 import { SaveToLibraryButton } from "@/components/save-to-library-button";
 import { LibraryActions } from "@/components/library-actions";
 import type { SupabaseSummary } from "@/lib/supabase";
+import { AudioPlayer } from "@/components/audio-player";
+import { toast } from "sonner";
 
 type BookCardProps = {
   book: SupabaseSummary;
@@ -142,14 +151,77 @@ export function BookCard({
     return 'No summary available.';
   };
   const displaySummary = getDisplaySummary();
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+
+  const handleListen = async () => {
+    try {
+      setIsGeneratingAudio(true);
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookId: id, section: "full_summary" }),
+      });
+
+      if (!response.ok) {
+        const msg = await response.text().catch(() => "");
+        throw new Error(msg || "Failed to generate audio");
+      }
+
+      const data = (await response.json()) as {
+        audioUrl: string | null;
+        cached?: boolean;
+        fallback?: "speechSynthesis";
+        fallbackText?: string;
+      };
+
+      if (data.audioUrl) {
+        setAudioUrl(data.audioUrl);
+        setIsPlayerOpen(true);
+        toast.success(data.cached ? "Audio ready (cached)" : "Audio ready");
+        return;
+      }
+
+      if (data.fallback === "speechSynthesis" && typeof data.fallbackText === "string") {
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(data.fallbackText);
+          utterance.rate = 1.0;
+          window.speechSynthesis.speak(utterance);
+          toast.message("Using device text-to-speech (fallback)");
+          return;
+        }
+      }
+
+      throw new Error("Failed to generate audio.");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to generate audio");
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
 
   return (
     <Card className={`group relative overflow-hidden rounded-2xl border-0 shadow-sm transition-all duration-300 hover:shadow-lg ${getCardBackground()}`}>
       {/* Audio indicator */}
       <div className="absolute left-4 top-4 z-10">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void handleListen();
+          }}
+          disabled={isGeneratingAudio}
+          className="h-8 w-8 rounded-full bg-white shadow-sm hover:bg-white/90 p-0"
+          title="Listen"
+        >
           <Headphones className="h-4 w-4 text-gray-600" />
-        </div>
+        </Button>
       </div>
 
       {/* Bookmark icon */}
@@ -279,6 +351,15 @@ export function BookCard({
           )}
         </div>
       </CardContent>
+
+      <Dialog open={isPlayerOpen} onOpenChange={setIsPlayerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Narration</DialogTitle>
+          </DialogHeader>
+          {audioUrl ? <AudioPlayer src={audioUrl} title="Full summary narration" autoPlay /> : null}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

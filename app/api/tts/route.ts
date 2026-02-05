@@ -100,12 +100,31 @@ export async function POST(request: NextRequest) {
       return result;
     }
 
-    const sectionText = extractSectionText(book.summary as SummaryPayload, sectionKey, book.title ?? undefined);
-    const audioBuffer = await generateLongSpeechFromText({
-      text: sectionText,
-      voiceId: resolvedVoiceId,
-      modelId: resolvedModelId,
-    });
+    const sectionText = extractSectionText(
+      book.summary as SummaryPayload,
+      sectionKey,
+      book.title ?? undefined,
+    );
+
+    let audioBuffer: Buffer | null = null;
+    try {
+      audioBuffer = await generateLongSpeechFromText({
+        text: sectionText,
+        voiceId: resolvedVoiceId,
+        modelId: resolvedModelId,
+      });
+    } catch (e) {
+      // Free fallback: return text for browser SpeechSynthesis.
+      console.error("ElevenLabs generation failed, returning fallback text:", e);
+      const result = NextResponse.json(
+        { audioUrl: null, cached: false, fallback: "speechSynthesis", fallbackText: sectionText },
+        { status: 200 },
+      );
+      authResponse.cookies.getAll().forEach((cookie) => {
+        result.cookies.set(cookie);
+      });
+      return result;
+    }
 
     const path = `narrations/${book.id}/${resolvedVoiceId}/${resolvedModelId}/${sectionKey}.mp3`;
     const { error: uploadError } = await adminClient.storage
