@@ -7,15 +7,11 @@ import { Bookmark, Headphones, Play } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DeleteBookButton } from "@/components/delete-book-button";
 import { SaveToLibraryButton } from "@/components/save-to-library-button";
 import { LibraryActions } from "@/components/library-actions";
-import { truncate } from "@/lib/utils";
 import type { SupabaseSummary } from "@/lib/supabase";
 
 type BookCardProps = {
@@ -107,7 +103,29 @@ export function BookCard({
 
   // Get display summary - prefer short_summary, then quick_summary, then first 200 chars of raw_text
   const getDisplaySummary = () => {
-    if (description) return description;
+    const toSentenceBlurb = (text: string) => {
+      const cleaned = text
+        .replace(/\r\n/g, "\n")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      if (!cleaned) return "";
+      const firstPara = cleaned.split(/\n{2,}/g)[0]?.trim() ?? cleaned;
+      const sentences = firstPara
+        .split(/(?<=[.!?])\s+/g)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return sentences.slice(0, 3).join(" ");
+    };
+
+    // If description exists but starts with deep-dive headings, clean it up.
+    if (description) {
+      const desc = description.trim();
+      if (/^part\s+\d+\s*:/i.test(desc) || desc.includes("ONE-PAGE EXECUTIVE SUMMARY")) {
+        return toSentenceBlurb(desc);
+      }
+      return desc;
+    }
 
     if (isStructuredSummary) {
       const structured = summary as { short_summary?: string; quick_summary?: string };
@@ -115,12 +133,11 @@ export function BookCard({
         return structured.short_summary;
       }
       if (structured.quick_summary && typeof structured.quick_summary === 'string') {
-        return structured.quick_summary.substring(0, 200) + (structured.quick_summary.length > 200 ? '...' : '');
+        return toSentenceBlurb(structured.quick_summary);
       }
     }
     if (isRawText && rawText) {
-      // For raw text, use first 200 characters
-      return rawText.substring(0, 200) + (rawText.length > 200 ? '...' : '');
+      return toSentenceBlurb(rawText);
     }
     return 'No summary available.';
   };
