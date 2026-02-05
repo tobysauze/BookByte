@@ -4,6 +4,8 @@ import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { getUserRole } from "@/lib/user-roles";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +24,10 @@ export async function GET(request: NextRequest) {
       },
       { status: 200 },
     );
+
+    // Prevent any CDN/browser caching (auth is per-user).
+    result.headers.set("Cache-Control", "no-store, max-age=0");
+    result.headers.set("Vary", "Cookie");
 
     authResponse.cookies.getAll().forEach((cookie) => {
       result.cookies.set(cookie);

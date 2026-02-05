@@ -60,33 +60,12 @@ export function Navbar({ initialUser }: NavbarProps) {
   const [user, setUser] = useState<User | null>(initialUser);
   const [userRole, setUserRole] = useState<UserRole>(null);
 
-  // Fetch user role when user changes
-  useEffect(() => {
-    const fetchUserRole = async () => {
-      if (!user) {
-        setUserRole(null);
-        return;
-      }
-
-      try {
-        const response = await fetch("/api/me");
-        const data = (await response.json().catch(() => ({}))) as { role?: UserRole };
-        setUserRole(data?.role ?? "regular");
-      } catch (error) {
-        console.error("Error fetching user role:", error);
-        setUserRole("regular"); // Default to regular user
-      }
-    };
-
-    fetchUserRole();
-  }, [user]);
-
   useEffect(() => {
     // Keep navbar state in sync with cookie-based auth.
     // After login/logout we navigate + refresh, but this keeps things resilient.
     const sync = async () => {
       try {
-        const response = await fetch("/api/me");
+        const response = await fetch("/api/me", { cache: "no-store" });
         const data = (await response.json().catch(() => ({}))) as {
           user?: { id: string; email?: string | null } | null;
           role?: UserRole | null;
@@ -151,7 +130,7 @@ export function Navbar({ initialUser }: NavbarProps) {
           })}
         </nav>
 
-        <div className="flex items-center gap-2 flex-shrink-0 ml-auto min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 flex-shrink-0 ml-auto min-w-0">
           <ThemeToggle />
 
           {/* Always-visible auth action on mobile */}

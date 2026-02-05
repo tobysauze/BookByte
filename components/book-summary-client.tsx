@@ -16,6 +16,7 @@ import type { SummaryPayload } from "@/lib/schemas";
 import { summarySchema } from "@/lib/schemas";
 import { RawTextSummaryView } from "@/components/raw-text-summary-view";
 import { AudioPlayer } from "@/components/audio-player";
+import { SpeechSynthesisPlayer } from "@/components/speech-synthesis-player";
 import { toast } from "sonner";
 
 type BookSummaryClientProps = {
@@ -67,6 +68,7 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
     }
     return null;
   });
+  const [fallbackAudioText, setFallbackAudioText] = useState<string | null>(null);
 
   const structuredSummary = book.summary as z.infer<typeof summarySchema>;
   const [isGenerating, setIsGenerating] = useState(false);
@@ -168,6 +170,7 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
     setError(null);
     try {
       setIsGenerating(true);
+      setFallbackAudioText(null);
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -205,24 +208,18 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
           src: data.audioUrl,
           title: section === "full_summary" ? "Full Summary narration" : "Narration",
         });
+        setFallbackAudioText(null);
         toast.success(data.cached ? "Audio ready (cached)" : "Audio ready");
         return data.audioUrl;
       }
 
       if (data.fallback === "speechSynthesis" && typeof data.fallbackText === "string") {
-        // Free backup: use device TTS (not cached).
-        try {
-          if (typeof window !== "undefined" && "speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(data.fallbackText);
-            utterance.rate = 1.0;
-            window.speechSynthesis.speak(utterance);
-            toast.message("Using device text-to-speech (fallback)");
-            return undefined;
-          }
-        } catch (e) {
-          console.error("SpeechSynthesis fallback failed:", e);
-        }
+        // Free backup with controls: show a fallback player instead of fire-and-forget.
+        setCurrentAudio(null);
+        setFallbackAudioText(data.fallbackText);
+        setIsAudioVisible(true);
+        toast.message("Using device text-to-speech (fallback)");
+        return undefined;
       }
 
       throw new Error("Failed to generate audio.");
@@ -443,7 +440,7 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
         </div>
 
         {/* Floating audio player (appears after generation) */}
-        {isAudioVisible && currentAudio?.src ? (
+        {isAudioVisible && (currentAudio?.src || fallbackAudioText) ? (
           <div className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
             <div className="mb-2 flex justify-end">
               <button
@@ -454,11 +451,11 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
                 Hide
               </button>
             </div>
-            <AudioPlayer
-              src={currentAudio.src}
-              title={currentAudio.title}
-              autoPlay
-            />
+            {currentAudio?.src ? (
+              <AudioPlayer src={currentAudio.src} title={currentAudio.title} autoPlay />
+            ) : fallbackAudioText ? (
+              <SpeechSynthesisPlayer text={fallbackAudioText} autoPlay />
+            ) : null}
           </div>
         ) : null}
 

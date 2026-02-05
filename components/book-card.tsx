@@ -21,6 +21,7 @@ import { SaveToLibraryButton } from "@/components/save-to-library-button";
 import { LibraryActions } from "@/components/library-actions";
 import type { SupabaseSummary } from "@/lib/supabase";
 import { AudioPlayer } from "@/components/audio-player";
+import { SpeechSynthesisPlayer } from "@/components/speech-synthesis-player";
 import { toast } from "sonner";
 
 type BookCardProps = {
@@ -153,11 +154,13 @@ export function BookCard({
   const displaySummary = getDisplaySummary();
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [fallbackText, setFallbackText] = useState<string | null>(null);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
 
   const handleListen = async () => {
     try {
       setIsGeneratingAudio(true);
+      setFallbackText(null);
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,14 +187,12 @@ export function BookCard({
       }
 
       if (data.fallback === "speechSynthesis" && typeof data.fallbackText === "string") {
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(data.fallbackText);
-          utterance.rate = 1.0;
-          window.speechSynthesis.speak(utterance);
-          toast.message("Using device text-to-speech (fallback)");
-          return;
-        }
+        // Show a fallback player with pause/resume + next/prev chunk controls.
+        setAudioUrl(null);
+        setFallbackText(data.fallbackText);
+        setIsPlayerOpen(true);
+        toast.message("Using device text-to-speech (fallback)");
+        return;
       }
 
       throw new Error("Failed to generate audio.");
@@ -357,7 +358,11 @@ export function BookCard({
           <DialogHeader>
             <DialogTitle>Narration</DialogTitle>
           </DialogHeader>
-          {audioUrl ? <AudioPlayer src={audioUrl} title="Full summary narration" autoPlay /> : null}
+          {audioUrl ? (
+            <AudioPlayer src={audioUrl} title="Full summary narration" autoPlay />
+          ) : fallbackText ? (
+            <SpeechSynthesisPlayer text={fallbackText} autoPlay />
+          ) : null}
         </DialogContent>
       </Dialog>
     </Card>
