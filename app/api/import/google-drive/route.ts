@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { calculateBookMetadata } from "@/lib/metadata-utils";
 import { rawTextSummarySchema, summarySchema } from "@/lib/schemas";
+import { maybeGenerateAndSaveCover } from "@/lib/cover-generator";
 
 export const runtime = "nodejs";
 
@@ -86,6 +87,20 @@ export async function POST(request: NextRequest) {
     if (error || !data) {
       console.error(error);
       return NextResponse.json({ error: "Failed to create book" }, { status: 500 });
+    }
+
+    // Best-effort: generate a cartoony cover after import.
+    try {
+      await maybeGenerateAndSaveCover({
+        bookId: data.id,
+        userId: ownerUserId,
+        title: body.title,
+        author: body.author ?? null,
+        description: metadata.description,
+        category: metadata.category,
+      });
+    } catch (e) {
+      console.error("Auto cover generation failed:", e);
     }
 
     return NextResponse.json({ bookId: data.id }, { status: 200 });

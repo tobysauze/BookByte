@@ -6,6 +6,7 @@ import { canEditBook } from "@/lib/user-roles";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { calculateBookMetadata } from "@/lib/metadata-utils";
+import { maybeGenerateAndSaveCover } from "@/lib/cover-generator";
 
 export const runtime = "nodejs";
 
@@ -216,7 +217,7 @@ export async function POST(
     // Get the book
     const { data: book, error: bookError } = await supabase
       .from("books")
-      .select("id, title, author, user_id, is_public")
+      .select("id, title, author, user_id, is_public, cover_url")
       .eq("id", id)
       .single();
 
@@ -268,6 +269,21 @@ export async function POST(
       authResponse.cookies.getAll().forEach((cookie) => {
         result.cookies.set(cookie);
       });
+
+      // Auto-generate a cartoony cover after upload (best-effort).
+      try {
+        await maybeGenerateAndSaveCover({
+          bookId: id,
+          userId: book.user_id,
+          title: book.title || "Untitled",
+          author: book.author,
+          description: metadata.description,
+          category: metadata.category,
+          existingCoverUrl: book.cover_url,
+        });
+      } catch (e) {
+        console.error("Auto cover generation failed:", e);
+      }
 
       return result;
     }
@@ -471,6 +487,21 @@ Return ONLY valid JSON matching this exact structure (no markdown formatting, no
       authResponse.cookies.getAll().forEach((cookie) => {
         result.cookies.set(cookie);
       });
+
+      // Auto-generate a cartoony cover after upload (best-effort).
+      try {
+        await maybeGenerateAndSaveCover({
+          bookId: id,
+          userId: book.user_id,
+          title: book.title || "Untitled",
+          author: book.author,
+          description: metadata.description,
+          category: metadata.category,
+          existingCoverUrl: book.cover_url,
+        });
+      } catch (e) {
+        console.error("Auto cover generation failed:", e);
+      }
 
       return result;
     } catch (error) {

@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { summarySchema, flexibleSummarySchema, rawTextSummarySchema } from "@/lib/schemas";
+import { calculateBookMetadata } from "@/lib/metadata-utils";
+import { maybeGenerateAndSaveCover } from "@/lib/cover-generator";
 
 export const runtime = "nodejs";
 
@@ -21,7 +23,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as SavePayload;
     
     // Try raw text schema first (new format), then strict schema, then flexible schema
-    let parsedSummary: z.SafeParseReturnType<any, any> = rawTextSummarySchema.safeParse(body.summary);
+    let parsedSummary: z.SafeParseReturnType<unknown, unknown> =
+      rawTextSummarySchema.safeParse(body.summary);
     
     if (!parsedSummary.success) {
       // Try structured schema (legacy format)
@@ -83,6 +86,23 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error(error);
       throw new Error("Failed to save summary.");
+    }
+
+    // Best-effort: generate a cartoony cover after creation.
+    // If coverUrl exists (original cover), we use it as a vibe reference and overwrite cover_url with the generated one.
+    try {
+      const meta = calculateBookMetadata(parsedSummary.data);
+      await maybeGenerateAndSaveCover({
+        bookId: data?.id,
+        userId: user.id,
+        title: metadata.title,
+        author: metadata.author ?? null,
+        description: meta.description,
+        category: meta.category,
+        existingCoverUrl: metadata.coverUrl ?? null,
+      });
+    } catch (e) {
+      console.error("Auto cover generation failed:", e);
     }
 
     const response = NextResponse.json({ bookId: data?.id });
