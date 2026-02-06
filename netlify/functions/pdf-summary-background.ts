@@ -194,9 +194,38 @@ function buildPagedText(pages: string[]) {
     .trim();
 }
 
+async function fetchWithRetries(
+  url: string,
+  init: RequestInit,
+  label: string,
+  attempts = 3,
+): Promise<Response> {
+  let lastErr: unknown = null;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetch(url, init);
+      return res;
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[pdf-summary] ${label} fetch attempt ${i}/${attempts} failed: ${msg}`);
+      // Exponential-ish backoff: 1s, 2s, 4s...
+      const delayMs = 1000 * Math.pow(2, i - 1);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  throw new Error(`${label} failed: ${msg}`);
+}
+
 async function downloadPdf(params: { sourceUrl?: string | null; driveFileId?: string | null; driveAccessToken?: string | null }) {
   if (params.sourceUrl) {
-    const res = await fetch(params.sourceUrl);
+    const res = await fetchWithRetries(
+      params.sourceUrl,
+      { method: "GET" },
+      "Download PDF from sourceUrl",
+      3,
+    );
     if (!res.ok) throw new Error(`Failed to download PDF from sourceUrl: ${res.status} ${res.statusText}`);
     const ab = await res.arrayBuffer();
     return Buffer.from(ab);
@@ -204,9 +233,12 @@ async function downloadPdf(params: { sourceUrl?: string | null; driveFileId?: st
 
   if (params.driveFileId && params.driveAccessToken) {
     const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(params.driveFileId)}?alt=media`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${params.driveAccessToken}` },
-    });
+    const res = await fetchWithRetries(
+      url,
+      { method: "GET", headers: { Authorization: `Bearer ${params.driveAccessToken}` } },
+      "Download PDF from Google Drive",
+      3,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`Failed to download PDF from Google Drive: ${res.status} ${res.statusText}${text ? ` - ${text}` : ""}`);
@@ -227,7 +259,11 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
     throw new Error("Missing required environment variable: MOONSHOT_API_KEY");
   }
 
-  const baseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1").replace(/\/+$/, "");
+  // Moonshot docs reference both api.moonshot.ai and api.moonshot.cn in examples.
+  // Some hosts/environments have intermittent DNS/TLS routing issues to one or the other,
+  // so we try the configured base URL first, then fall back.
+  const primaryBaseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1").replace(/\/+$/, "");
+  const fallbackBaseUrl = (process.env.MOONSHOT_FALLBACK_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/+$/, "");
 
   const body: Record<string, unknown> = {
     model: params.model,
@@ -247,14 +283,35 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
     body.temperature = 0.35;
   }
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const doRequest = async (baseUrl: string, which: "primary" | "fallback") => {
+    const endpoint = `${baseUrl}/chat/completions`;
+    try {
+      return await fetchWithRetries(
+        endpoint,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        },
+        `Kimi API (${which})`,
+        3,
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Kimi API (${which}) request failed: ${msg}`);
+    }
+  };
+
+  let res: Response;
+  try {
+    res = await doRequest(primaryBaseUrl, "primary");
+  } catch (e1) {
+    console.warn("[pdf-summary] Primary Kimi base URL failed, trying fallback.", e1);
+    res = await doRequest(fallbackBaseUrl, "fallback");
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
