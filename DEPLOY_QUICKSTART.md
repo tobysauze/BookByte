@@ -33,6 +33,9 @@ git push -u origin main
    ELEVENLABS_API_KEY
    ELEVENLABS_VOICE_ID
    ELEVENLABS_MODEL_ID
+   # If using PDF auto-summarization via direct Kimi/Moonshot API:
+   MOONSHOT_API_KEY
+   KIMI_MODEL
    ```
 
    Copy values from your `.env.local` file.

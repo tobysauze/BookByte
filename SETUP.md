@@ -33,12 +33,16 @@ This guide will help you set up your BookByte application with a new Supabase pr
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
    SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
    
-   # Add your other API keys (OpenRouter, ElevenLabs, etc.)
+   # Add your other API keys (OpenRouter, ElevenLabs, Kimi/Moonshot, etc.)
    OPENROUTER_API_KEY=your-openrouter-api-key
    OPENROUTER_MODEL=openai/gpt-4o
    ELEVENLABS_API_KEY=your-elevenlabs-api-key
    ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
    ELEVENLABS_MODEL_ID=eleven_multilingual_v2
+
+   # Direct Kimi/Moonshot API (used by PDF auto-summarization worker)
+   MOONSHOT_API_KEY=your-moonshot-kimi-api-key
+   KIMI_MODEL=kimi-k2.5
    ```
 
 ## Step 4: Set Up the Database Schema

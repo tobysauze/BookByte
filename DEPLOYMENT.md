@@ -63,6 +63,9 @@ Vercel is the best option for Next.js apps - it's free, fast, and requires minim
    ELEVENLABS_API_KEY=your-elevenlabs-key
    ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
    ELEVENLABS_MODEL_ID=eleven_multilingual_v2
+   # If using PDF auto-summarization via direct Kimi/Moonshot API:
+   MOONSHOT_API_KEY=your-moonshot-kimi-api-key
+   KIMI_MODEL=kimi-k2.5
    ```
    
    **Important:** 
