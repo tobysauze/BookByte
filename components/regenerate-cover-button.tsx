@@ -58,10 +58,22 @@ export function RegenerateCoverButton({
       }
 
       const result = await response.json();
-      toast.success(result.message || "Cover regenerated successfully");
-      setIsOpen(false);
-      setFeedback("");
-      router.refresh();
+      
+      // Handle async response (202 Accepted)
+      if (response.status === 202) {
+        toast.success(result.message || "Cover regeneration started. It will be ready shortly.");
+        setIsOpen(false);
+        setFeedback("");
+        // Refresh after a delay to show the new cover
+        setTimeout(() => {
+          router.refresh();
+        }, 3000);
+      } else {
+        toast.success(result.message || "Cover regenerated successfully");
+        setIsOpen(false);
+        setFeedback("");
+        router.refresh();
+      }
     } catch (error) {
       console.error("Error regenerating cover:", error);
       toast.error(error instanceof Error ? error.message : "Failed to regenerate cover");

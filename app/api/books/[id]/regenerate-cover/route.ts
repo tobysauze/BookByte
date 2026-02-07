@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
 import { getUserRole } from "@/lib/user-roles";
-import { maybeGenerateAndSaveCover } from "@/lib/cover-generator";
 import { z } from "zod";
+
+function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) throw new Error(`Missing required environment variable: ${key}`);
+  return value;
+}
 
 const regenerateCoverSchema = z.object({
   feedback: z.string().optional().nullable(),
@@ -53,58 +58,61 @@ export async function POST(
       return applyCookies(NextResponse.json({ error: "Book not found" }, { status: 404 }));
     }
 
-    // Generate new cover (force regeneration even if cover already exists)
-    let result;
+    // Validate book has required fields
+    if (!book.title?.trim()) {
+      return applyCookies(
+        NextResponse.json({ error: "Book title is required" }, { status: 400 })
+      );
+    }
+
+    const authorTrimmed = (book.author || "").trim();
+    if (!authorTrimmed) {
+      return applyCookies(
+        NextResponse.json({ error: "Book author is required for cover generation" }, { status: 400 })
+      );
+    }
+
+    // Trigger background cover generation (async, won't timeout)
     try {
-      result = await maybeGenerateAndSaveCover({
-        bookId: book.id,
-        userId: book.user_id,
-        title: book.title,
-        author: book.author,
-        description: book.description,
-        category: book.category,
-        existingCoverUrl: book.cover_url,
-        force: true, // Force regeneration
-        feedback: feedback || null,
+      const secret = getRequiredEnv("GOOGLE_DRIVE_IMPORT_SECRET");
+      const origin = req.nextUrl.origin;
+      
+      // Fire and forget - trigger background function
+      fetch(`${origin}/.netlify/functions/generate-cover-background`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-import-secret": secret,
+        },
+        body: JSON.stringify({
+          bookId: book.id,
+          force: true,
+          feedback: feedback || null,
+        }),
+      }).catch((e) => {
+        console.warn("Failed to trigger background cover generation:", e);
       });
-    } catch (generateError) {
-      console.error("Cover generation error:", generateError);
-      const errorMessage = generateError instanceof Error ? generateError.message : "Unknown error during cover generation";
+
       return applyCookies(
         NextResponse.json(
-          { error: `Cover generation failed: ${errorMessage}` },
+          {
+            success: true,
+            message: feedback
+              ? "Cover regeneration started with your feedback. It will be ready shortly."
+              : "Cover regeneration started. It will be ready shortly.",
+          },
+          { status: 202 } // Accepted - processing asynchronously
+        )
+      );
+    } catch (error) {
+      console.error("Error triggering cover regeneration:", error);
+      return applyCookies(
+        NextResponse.json(
+          { error: error instanceof Error ? error.message : "Failed to start cover regeneration" },
           { status: 500 }
         )
       );
     }
-
-    if (result.skipped) {
-      return applyCookies(
-        NextResponse.json(
-          { error: "Cover generation skipped (missing title, author, or OpenAI API key not configured)" },
-          { status: 400 }
-        )
-      );
-    }
-
-    if (!result.coverUrl) {
-      return applyCookies(
-        NextResponse.json({ error: "Failed to generate cover: No cover URL returned" }, { status: 500 })
-      );
-    }
-
-    return applyCookies(
-      NextResponse.json(
-        {
-          success: true,
-          coverUrl: result.coverUrl,
-          message: feedback
-            ? "Cover regenerated with your feedback applied"
-            : "Cover regenerated successfully",
-        },
-        { status: 200 }
-      )
-    );
   } catch (error) {
     console.error("Error in /api/books/[id]/regenerate-cover:", error);
     if (error instanceof z.ZodError) {

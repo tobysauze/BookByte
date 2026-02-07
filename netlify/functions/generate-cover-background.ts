@@ -25,6 +25,9 @@ export const handler = async (event: any) => {
 
     const body = event.body ? JSON.parse(event.body) : {};
     const bookId = typeof body.bookId === "string" ? body.bookId : null;
+    const force = body.force === true;
+    const feedback = typeof body.feedback === "string" ? body.feedback : null;
+
     if (!bookId) {
       return { statusCode: 400, body: JSON.stringify({ error: "bookId is required" }) };
     }
@@ -49,6 +52,8 @@ export const handler = async (event: any) => {
       description: book.description,
       category: book.category,
       existingCoverUrl: book.cover_url,
+      force: force,
+      feedback: feedback,
     });
 
     return {
