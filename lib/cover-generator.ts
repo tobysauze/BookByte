@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { uploadToGoogleDrive } from "@/lib/google-drive-upload";
 
 type GenerateCoverParams = {
   bookId: string;
@@ -228,9 +229,37 @@ export async function maybeGenerateAndSaveCover({
   const bytes = Buffer.from(b64, "base64");
   const admin = getSupabaseAdminClient();
 
+  // Archive old cover if it exists and is a generated cover
+  let archivedCovers: Array<{ url: string; archived_at: string; reason?: string }> = [];
+  if (existingCoverUrl && isGeneratedCoverUrl(existingCoverUrl)) {
+    try {
+      // Fetch current archived_covers from database
+      const { data: book } = await admin
+        .from("books")
+        .select("archived_covers")
+        .eq("id", bookId)
+        .single();
+
+      archivedCovers = Array.isArray(book?.archived_covers) 
+        ? (book.archived_covers as Array<{ url: string; archived_at: string; reason?: string }>)
+        : [];
+
+      // Add current cover to archived list
+      archivedCovers.push({
+        url: existingCoverUrl,
+        archived_at: new Date().toISOString(),
+        reason: feedback ? `Regenerated with feedback: ${feedback.substring(0, 100)}` : "Regenerated",
+      });
+    } catch (err) {
+      console.warn("Failed to archive old cover:", err);
+      // Continue anyway - archiving is best-effort
+    }
+  }
+
   const fileName = `generated-cover-${bookId}.png`;
   const storagePath = `${userId}/${fileName}`;
 
+  // Upload to Supabase Storage
   const { data: uploadData, error: uploadError } = await admin.storage
     .from("book-files")
     .upload(storagePath, bytes, {
@@ -247,9 +276,28 @@ export async function maybeGenerateAndSaveCover({
     data: { publicUrl },
   } = admin.storage.from("book-files").getPublicUrl(uploadData.path);
 
+  // Upload to Google Drive (best-effort, don't fail if this errors)
+  const driveFolderId = process.env.GOOGLE_DRIVE_COVERS_FOLDER_ID;
+  if (driveFolderId) {
+    try {
+      const driveFileName = `${title}${author ? ` by ${author}` : ""}.png`;
+      const driveResult = await uploadToGoogleDrive(bytes, driveFileName, driveFolderId, "image/png");
+      if (driveResult) {
+        console.log(`✅ Cover uploaded to Google Drive: ${driveResult.webViewLink}`);
+      }
+    } catch (driveError) {
+      console.warn("Failed to upload cover to Google Drive (continuing anyway):", driveError);
+      // Don't throw - Google Drive upload is optional
+    }
+  }
+
+  // Update book with new cover URL and archived covers
   const { error: updateError } = await admin
     .from("books")
-    .update({ cover_url: publicUrl })
+    .update({ 
+      cover_url: publicUrl,
+      archived_covers: archivedCovers.length > 0 ? archivedCovers : undefined,
+    })
     .eq("id", bookId);
 
   if (updateError) {
