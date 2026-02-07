@@ -19,7 +19,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
     }
 
     // Get user's library items (saved books)
-    const libraryQuery = supabase
+    let libraryQuery = supabase
         .from("user_library")
         .select(`
       book_id,
@@ -41,10 +41,48 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
       updated_at
     `)
         .eq("user_id", user.id)
-        .order("updated_at", { ascending: false });
+        .order("updated_at", { ascending: false })
+        .limit(50);
+
+    if (searchParams?.category && searchParams.category !== "all") {
+        // Filter referencing the joined table needs !inner hint to filter the top level rows
+        // Note: Supabase JS syntax for filtering on joined tables:
+        // .eq('books.category', category)
+        // AND we must ensure the join is an inner join for filtering to work on parent rows, 
+        // which `!inner` typically does.
+        // However, we are selecting `books:book_id(...)`.
+        // Let's modify the select string dynamically.
+
+        // Re-construct the query with filtering
+        libraryQuery = supabase
+            .from("user_library")
+            .select(`
+                book_id,
+                books:book_id!inner (
+                    id,
+                    title,
+                    author,
+                    cover_url,
+                    summary,
+                    progress_percent,
+                    word_count,
+                    description,
+                    category,
+                    is_public,
+                    created_at
+                ),
+                is_read,
+                is_favorited,
+                updated_at
+            `)
+            .eq("user_id", user.id)
+            .eq("books.category", searchParams.category)
+            .order("updated_at", { ascending: false })
+            .limit(50);
+    }
 
     // Get user's authored books
-    const authoredQuery = supabase
+    let authoredQuery = supabase
         .from("books")
         .select(`
       id,
@@ -60,7 +98,12 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
       created_at
     `)
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+    if (searchParams?.category && searchParams.category !== "all") {
+        authoredQuery = authoredQuery.eq("category", searchParams.category);
+    }
 
     const [libraryRes, authoredRes] = await Promise.all([libraryQuery, authoredQuery]);
 
@@ -138,7 +181,8 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
     }
 
     if (searchParams?.category && searchParams.category !== "all") {
-        books = books.filter(book => book.category === searchParams.category);
+        // Already filtered in DB
+        // books = books.filter(book => book.category === searchParams.category);
     }
 
     return (
