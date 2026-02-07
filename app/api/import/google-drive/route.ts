@@ -22,6 +22,49 @@ const importBodySchema = z.object({
   source: z.string().optional(),
 });
 
+function normalizeTitleAuthor(input: { title: string; author?: string | null }): { title: string; author: string | null } {
+  let title = (input.title || "").trim();
+  let author = (input.author ?? null) ? String(input.author).trim() : null;
+
+  // Strip extension if caller passed a filename.
+  title = title.replace(/\.(pdf|epub|txt)$/i, "").trim();
+
+  // Strip common suffixes like "— Summary"
+  title = title.replace(/\s*(?:—|–|-)\s*summary\s*$/i, "").trim();
+  title = title.replace(/\s*\bsummary\s*$/i, "").trim();
+
+  // Convert underscores to spaces (common Drive-safe filenames)
+  title = title.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  if (author) author = author.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+
+  // If author isn't provided, infer from "Title by Author" or "Title - Author" patterns.
+  if (!author) {
+    const byMatch = title.match(/^(.*)\s+by\s+(.+)$/i);
+    if (byMatch) {
+      const t = (byMatch[1] || "").trim();
+      const a = (byMatch[2] || "").trim();
+      if (t) title = t;
+      if (a) author = a;
+    } else {
+      const dashParts = title.split(/\s+(?:—|–|-)\s+/g).map((p) => p.trim()).filter(Boolean);
+      if (dashParts.length >= 2) {
+        author = dashParts.pop() ?? null;
+        title = dashParts.join(" - ") || title;
+      }
+    }
+  } else {
+    // If both title and author are provided but title still includes the author, de-duplicate.
+    const bySuffix = new RegExp(`\\s+by\\s+${escapeRegExp_(author)}\\s*$`, "i");
+    title = title.replace(bySuffix, "").trim();
+  }
+
+  return { title: title || "Untitled", author: author && author.length ? author : null };
+}
+
+function escapeRegExp_(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function looksLikeDeepDivePromptOutput(text: string) {
   const t = text.toLowerCase();
   return (
@@ -69,13 +112,14 @@ export async function POST(request: NextRequest) {
     }
 
     const metadata = calculateBookMetadata(summary);
+    const normalized = normalizeTitleAuthor({ title: body.title, author: body.author ?? null });
 
     const { data, error } = await admin
       .from("books")
       .insert({
         user_id: ownerUserId,
-        title: body.title,
-        author: body.author ?? null,
+        title: normalized.title,
+        author: normalized.author,
         summary,
         is_public: body.isPublic ?? false,
         ...metadata,

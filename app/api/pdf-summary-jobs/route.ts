@@ -14,18 +14,32 @@ function getRequiredEnv(key: string): string {
 }
 
 function parseTitleAuthorFromFilename(fileName: string): { title: string; author: string | null } {
-  const base = fileName.replace(/\.(pdf|epub|txt)$/i, "").trim();
-  // Common patterns:
-  // - "Title - Author"
-  // - "Title — Author"
-  // - "Title _ Author"
-  // - "Title – Author"
-  const parts = base.split(/\s*(?:-+|—|–|_)\s*/g).map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 2) {
-    const author = parts.pop() ?? "";
-    const title = parts.join(" - ");
-    return { title: title || base, author: author || null };
+  // 1) Remove extension
+  let base = fileName.replace(/\.(pdf|epub|txt)$/i, "").trim();
+
+  // 2) Strip common suffixes like "— Summary"
+  base = base.replace(/\s*(?:—|–|-)\s*summary\s*$/i, "").trim();
+  base = base.replace(/\s*\bsummary\s*$/i, "").trim();
+
+  // 3) Convert underscores to spaces (common Drive-safe filenames)
+  base = base.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+
+  // 4) Prefer explicit "Title by Author"
+  const byMatch = base.match(/^(.*)\s+by\s+(.+)$/i);
+  if (byMatch) {
+    const title = (byMatch[1] || "").trim();
+    const author = (byMatch[2] || "").trim();
+    return { title: title || "Untitled", author: author || null };
   }
+
+  // 5) Common "Title - Author" / "Title — Author" / "Title – Author" (only split when separator has spaces)
+  const dashParts = base.split(/\s+(?:—|–|-)\s+/g).map((p) => p.trim()).filter(Boolean);
+  if (dashParts.length >= 2) {
+    const author = dashParts.pop() ?? "";
+    const title = dashParts.join(" - ");
+    return { title: title || "Untitled", author: author || null };
+  }
+
   return { title: base || "Untitled", author: null };
 }
 
