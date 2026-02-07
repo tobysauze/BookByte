@@ -7,12 +7,21 @@
  * Required Script Properties:
  *  - BOOKBYTE_BASE_URL
  *  - BOOKBYTE_IMPORT_SECRET
- *  - COVERS_FOLDER_ID (Google Drive folder for covers)
  *  - SUPABASE_URL
  *  - SUPABASE_SERVICE_ROLE_KEY (for querying books)
  */
 
 const COVERS_FOLDER_ID = "1OSbTASxMzJsayHr0dlSzx9dqdkp-fMR5";
+
+/**
+ * Test function - run this to verify the script is working
+ */
+function testCoverUpload() {
+  Logger.log("Test function running - script is loaded correctly");
+  Logger.log("COVERS_FOLDER_ID: " + COVERS_FOLDER_ID);
+  const cfg = getConfig_();
+  Logger.log("Config loaded: " + JSON.stringify(cfg));
+}
 
 function uploadCoversToDrive() {
   try {
