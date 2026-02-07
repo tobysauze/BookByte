@@ -9,6 +9,14 @@ function getRequiredEnv(key: string): string {
 
 const DEEP_DIVE_PROMPT = `You are an expert book summarizer and synthesis analyst. Your task is to create a comprehensive, high-value summary of the attached PDF book following the exact structure below. The total output must be between 5,000-20,000 words. Analyze the book deeply—extract not just what is said, but why it matters, how it connects to broader ideas, and how readers can apply it.
 
+CARD BLURB (CRITICAL):
+- At the VERY TOP of your output, include a short 1-3 sentence blurb suitable for a book card preview.
+- Output it EXACTLY between these tags (tags included), with NOTHING else on those lines:
+[CARD_BLURB]
+<1-3 sentences only, no label, no bullet points, no extra lines>
+[/CARD_BLURB]
+- After [/CARD_BLURB], continue with the structure below exactly.
+
 STRUCTURE:
 
 ═══════════════════════════════════════════════════════════

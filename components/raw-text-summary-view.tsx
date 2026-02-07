@@ -9,8 +9,13 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
     const textContainerRef = useRef<HTMLDivElement | null>(null);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
+    const displayContent = useMemo(() => {
+        // Hide the card blurb tags from the main reading view.
+        return content.replace(/\[CARD_BLURB\][\s\S]*?\[\/CARD_BLURB\]\s*/i, "").trim();
+    }, [content]);
+
     const toc = useMemo(() => {
-        const text = content.replace(/\r\n/g, "\n");
+        const text = displayContent.replace(/\r\n/g, "\n");
         const lines = text.split("\n");
 
         const items: Array<{ id: string; label: string; level: 1 | 2 | 3; offset: number }> = [];
@@ -109,7 +114,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         }
 
         return items;
-    }, [content]);
+    }, [displayContent]);
 
     const scrollToOffset = (charOffset: number) => {
         const root = textContainerRef.current;
@@ -196,7 +201,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
             <div className="flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-8">
                 <div className="prose dark:prose-invert max-w-none font-mono text-sm leading-relaxed">
                     <HighlightableText
-                        text={content}
+                        text={displayContent}
                         bookId={bookId}
                         section="raw_text"
                         itemIndex={0}

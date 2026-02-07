@@ -75,6 +75,10 @@ function looksLikeDeepDivePromptOutput(text: string) {
   );
 }
 
+function stripCardBlurbBlock(text: string) {
+  return text.replace(/\[CARD_BLURB\][\s\S]*?\[\/CARD_BLURB\]\s*/i, "").trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const secret = getRequiredEnv("GOOGLE_DRIVE_IMPORT_SECRET");
@@ -113,6 +117,14 @@ export async function POST(request: NextRequest) {
 
     const metadata = calculateBookMetadata(summary);
     const normalized = normalizeTitleAuthor({ title: body.title, author: body.author ?? null });
+
+    // Keep the card blurb for metadata extraction, but store raw_text without the tags.
+    if (summary && typeof summary === "object" && "raw_text" in summary) {
+      const raw = (summary as Record<string, unknown>).raw_text;
+      if (typeof raw === "string") {
+        (summary as Record<string, unknown>).raw_text = stripCardBlurbBlock(raw);
+      }
+    }
 
     const { data, error } = await admin
       .from("books")

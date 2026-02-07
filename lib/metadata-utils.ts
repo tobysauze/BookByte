@@ -36,6 +36,12 @@ export function calculateBookMetadata(summary: unknown): {
   const deepDiveBlurb = (raw: string) => {
     const text = raw.replace(/\r\n/g, "\n");
 
+    // Prefer an explicit card blurb block if present.
+    const cardMatch = text.match(/\[CARD_BLURB\]\s*([\s\S]*?)\s*\[\/CARD_BLURB\]/i);
+    if (cardMatch?.[1]) {
+      return sentenceBlurb(cardMatch[1], 3);
+    }
+
     // Try to extract "Core Thesis" chunk first (best summary-like section).
     const coreMatch = text.match(
       /(?:\*\*\s*)?Core Thesis(?:\s*\*\*)?\s*:?\s*([\s\S]*?)(?=\n\s*(?:Why This Book Matters|The Promised Transformation|Key Methodology|Who Should Read This|════════|PART\s+\d+\s*:))/i,
