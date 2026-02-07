@@ -32,6 +32,7 @@ import type { SupabaseSummary } from "@/lib/supabase";
 import { AudioPlayer } from "@/components/audio-player";
 import { SpeechSynthesisPlayer } from "@/components/speech-synthesis-player";
 import { toast } from "sonner";
+import { CATEGORIES } from "@/lib/categories";
 
 type BookCardProps = {
   book: SupabaseSummary;
@@ -42,42 +43,6 @@ type BookCardProps = {
   isFavorited?: boolean;
   showLibraryActions?: boolean;
 };
-
-const CATEGORIES = [
-  "Arts / Design",
-  "Biography / Memoir",
-  "Business",
-  "Career / Success",
-  "Communication",
-  "Economics",
-  "Education",
-  "Entertainment",
-  "Entrepreneurship",
-  "Fiction",
-  "Food",
-  "Health",
-  "History",
-  "Law",
-  "Lifestyle",
-  "Management / Leadership",
-  "Marketing",
-  "Media",
-  "Money / Finance",
-  "Motivation",
-  "Parenting",
-  "Philosophy",
-  "Politics",
-  "Productivity",
-  "Psychology",
-  "Relationships",
-  "Sales",
-  "Science",
-  "Self-Improvement",
-  "Society / Culture",
-  "Spirituality",
-  "Sports",
-  "Technology"
-];
 
 export function BookCard({
   book,

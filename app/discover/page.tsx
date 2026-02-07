@@ -4,8 +4,9 @@ import type { SupabaseSummary } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
 import { getUserRole } from "@/lib/user-roles";
 import { SearchInput } from "@/components/search-input";
+import { CategoryFilter } from "@/components/category-filter";
 
-export default async function DiscoverPage(props: { searchParams: Promise<{ query?: string }> }) {
+export default async function DiscoverPage(props: { searchParams: Promise<{ query?: string; category?: string }> }) {
   const supabase = await createSupabaseServerClient();
   const user = await getSessionUser();
   const userRole = await getUserRole();
@@ -34,6 +35,11 @@ export default async function DiscoverPage(props: { searchParams: Promise<{ quer
   if (searchParams?.query) {
     const query = searchParams.query;
     queryBuilder = queryBuilder.or(`title.ilike.%${query}%,author.ilike.%${query}%`);
+  }
+
+  // Apply category filter if present
+  if (searchParams?.category && searchParams.category !== "all") {
+    queryBuilder = queryBuilder.eq("category", searchParams.category);
   }
 
   const { data: books, error } = await queryBuilder;
@@ -67,8 +73,9 @@ export default async function DiscoverPage(props: { searchParams: Promise<{ quer
             Explore summaries shared by the BookByte community. Discover new books and insights from fellow readers.
           </p>
         </div>
-        <div className="pt-2">
+        <div className="pt-2 flex flex-col sm:flex-row gap-4">
           <SearchInput placeholder="Search community books..." />
+          <CategoryFilter />
         </div>
       </header>
 
