@@ -3,7 +3,9 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Bookmark, Headphones, Play } from "lucide-react";
+import { Bookmark, Headphones, Play, Pencil, Check, X } from "lucide-react";
+
+import { Input } from "@/components/ui/input";
 
 import {
   Card,
@@ -151,7 +153,67 @@ export function BookCard({
     }
     return 'No summary available.';
   };
+
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [optimisticCategory, setOptimisticCategory] = useState<string | null>(null);
+
+  const currentCategory = optimisticCategory || getCategory();
+
+  const handleSaveCategory = async () => {
+    if (!newCategory.trim()) {
+      setIsEditingCategory(false);
+      return;
+    }
+
+    const originalCategory = currentCategory;
+
+    // Optimistic update
+    setOptimisticCategory(newCategory);
+    setIsEditingCategory(false);
+
+    try {
+      const response = await fetch(`/api/books/${id}/category`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: newCategory }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update category");
+      }
+
+      toast.success("Category updated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update category");
+      // Revert optimistic update
+      setOptimisticCategory(null);
+    }
+  };
+
+  const startEditing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setNewCategory(currentCategory);
+    setIsEditingCategory(true);
+  };
+
+  const cancelEditing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsEditingCategory(false);
+    setNewCategory("");
+  };
+
+  const saveEditing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void handleSaveCategory();
+  };
+
   const displaySummary = getDisplaySummary();
+
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [fallbackText, setFallbackText] = useState<string | null>(null);
@@ -260,10 +322,51 @@ export function BookCard({
         </div>
 
         {/* Category */}
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
-            {getCategory()}
-          </span>
+        <div className="mb-2 flex items-center justify-between h-8">
+          {isEditingCategory ? (
+            <div className="flex items-center gap-2 w-full" onClick={(e) => e.preventDefault()}>
+              <Input
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                className="h-7 text-xs py-1 px-2"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                onClick={saveEditing}
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={cancelEditing}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                {currentCategory}
+              </span>
+              {userRole === "editor" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={startEditing}
+                  title="Edit Category"
+                >
+                  <Pencil className="h-3 w-3 text-gray-400 hover:text-gray-700" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Title */}
