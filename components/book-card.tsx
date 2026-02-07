@@ -18,6 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DeleteBookButton } from "@/components/delete-book-button";
 import { SaveToLibraryButton } from "@/components/save-to-library-button";
 import { LibraryActions } from "@/components/library-actions";
@@ -35,6 +42,42 @@ type BookCardProps = {
   isFavorited?: boolean;
   showLibraryActions?: boolean;
 };
+
+const CATEGORIES = [
+  "Arts / Design",
+  "Biography / Memoir",
+  "Business",
+  "Career / Success",
+  "Communication",
+  "Economics",
+  "Education",
+  "Entertainment",
+  "Entrepreneurship",
+  "Fiction",
+  "Food",
+  "Health",
+  "History",
+  "Law",
+  "Lifestyle",
+  "Management / Leadership",
+  "Marketing",
+  "Media",
+  "Money / Finance",
+  "Motivation",
+  "Parenting",
+  "Philosophy",
+  "Politics",
+  "Productivity",
+  "Psychology",
+  "Relationships",
+  "Sales",
+  "Science",
+  "Self-Improvement",
+  "Society / Culture",
+  "Spirituality",
+  "Sports",
+  "Technology"
+];
 
 export function BookCard({
   book,
@@ -325,13 +368,21 @@ export function BookCard({
         <div className="mb-2 flex items-center justify-between h-8">
           {isEditingCategory ? (
             <div className="flex items-center gap-2 w-full" onClick={(e) => e.preventDefault()}>
-              <Input
+              <Select
                 value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                className="h-7 text-xs py-1 px-2"
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-              />
+                onValueChange={setNewCategory}
+              >
+                <SelectTrigger className="h-7 text-xs py-1 px-2 w-full" onClick={(e) => e.stopPropagation()}>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent onClick={(e) => e.stopPropagation()}>
+                  {CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 size="sm"
                 variant="ghost"
