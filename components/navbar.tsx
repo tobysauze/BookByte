@@ -202,9 +202,10 @@ export function Navbar({ initialUser }: NavbarProps) {
                     await fetch("/api/auth/logout", { method: "POST" });
                     window.location.href = "/login";
                   }}
-                  className="flex"
+                  className="flex items-center gap-2 whitespace-nowrap"
+                  title="Logout"
                 >
-                  <LogOut className="h-4 w-4 sm:mr-2" />
+                  <LogOut className="h-4 w-4" />
                   <span>Logout</span>
                 </Button>
               </>
