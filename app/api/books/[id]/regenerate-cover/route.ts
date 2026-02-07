@@ -54,22 +54,34 @@ export async function POST(
     }
 
     // Generate new cover (force regeneration even if cover already exists)
-    const result = await maybeGenerateAndSaveCover({
-      bookId: book.id,
-      userId: book.user_id,
-      title: book.title,
-      author: book.author,
-      description: book.description,
-      category: book.category,
-      existingCoverUrl: book.cover_url,
-      force: true, // Force regeneration
-      feedback: feedback || null,
-    });
+    let result;
+    try {
+      result = await maybeGenerateAndSaveCover({
+        bookId: book.id,
+        userId: book.user_id,
+        title: book.title,
+        author: book.author,
+        description: book.description,
+        category: book.category,
+        existingCoverUrl: book.cover_url,
+        force: true, // Force regeneration
+        feedback: feedback || null,
+      });
+    } catch (generateError) {
+      console.error("Cover generation error:", generateError);
+      const errorMessage = generateError instanceof Error ? generateError.message : "Unknown error during cover generation";
+      return applyCookies(
+        NextResponse.json(
+          { error: `Cover generation failed: ${errorMessage}` },
+          { status: 500 }
+        )
+      );
+    }
 
     if (result.skipped) {
       return applyCookies(
         NextResponse.json(
-          { error: "Cover generation skipped (missing title or author)" },
+          { error: "Cover generation skipped (missing title, author, or OpenAI API key not configured)" },
           { status: 400 }
         )
       );
@@ -77,7 +89,7 @@ export async function POST(
 
     if (!result.coverUrl) {
       return applyCookies(
-        NextResponse.json({ error: "Failed to generate cover" }, { status: 500 })
+        NextResponse.json({ error: "Failed to generate cover: No cover URL returned" }, { status: 500 })
       );
     }
 

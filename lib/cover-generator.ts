@@ -207,15 +207,22 @@ export async function maybeGenerateAndSaveCover({
 
   const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
 
-  const img = await openai.images.generate({
-    model: imageModel,
-    size: "1024x1536",
-    prompt,
-  });
+  let img;
+  try {
+    img = await openai.images.generate({
+      model: imageModel,
+      size: "1024x1536",
+      prompt,
+    });
+  } catch (openaiError) {
+    const errorMessage = openaiError instanceof Error ? openaiError.message : String(openaiError);
+    console.error("OpenAI image generation error:", errorMessage);
+    throw new Error(`OpenAI image generation failed: ${errorMessage}`);
+  }
 
   const b64 = img.data?.[0]?.b64_json;
   if (!b64) {
-    throw new Error("OpenAI did not return image bytes.");
+    throw new Error("OpenAI did not return image bytes. Check that the model supports base64 output.");
   }
 
   const bytes = Buffer.from(b64, "base64");
