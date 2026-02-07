@@ -8,6 +8,7 @@ import { SaveToLibraryButton } from "@/components/save-to-library-button";
 import { LibraryActions } from "@/components/library-actions";
 import { VisibilityToggle } from "@/components/visibility-toggle";
 import { CoverUpload } from "@/components/cover-upload";
+import { RegenerateCoverButton } from "@/components/regenerate-cover-button";
 import { DownloadPdfButton } from "@/components/download-pdf-button";
 import { UploadSummaryButton } from "@/components/upload-summary-button";
 import { UploadChaptersButton } from "@/components/upload-chapters-button";
@@ -220,6 +221,10 @@ export function BookHeroClient({
               <>
                 <VisibilityToggle bookId={book.id} initialIsPublic={book.is_public} />
                 <CoverUpload
+                  bookId={book.id}
+                  currentCoverUrl={book.cover_url}
+                />
+                <RegenerateCoverButton
                   bookId={book.id}
                   currentCoverUrl={book.cover_url}
                 />
