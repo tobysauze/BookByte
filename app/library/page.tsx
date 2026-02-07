@@ -18,8 +18,8 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
         redirect("/login");
     }
 
-    // Get user's library items
-    let queryBuilder = supabase
+    // Get user's library items (saved books)
+    const libraryQuery = supabase
         .from("user_library")
         .select(`
       book_id,
@@ -43,21 +43,88 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
 
-    const { data: libraryItems, error } = await queryBuilder;
+    // Get user's authored books
+    const authoredQuery = supabase
+        .from("books")
+        .select(`
+      id,
+      title,
+      author,
+      cover_url,
+      summary,
+      progress_percent,
+      word_count,
+      description,
+      category,
+      is_public,
+      created_at
+    `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-    if (error) {
-        console.error("Error fetching library:", error);
+    const [libraryRes, authoredRes] = await Promise.all([libraryQuery, authoredQuery]);
+
+    if (libraryRes.error) {
+        console.error("Error fetching library:", libraryRes.error);
+    }
+    if (authoredRes.error) {
+        console.error("Error fetching authored books:", authoredRes.error);
     }
 
+    const libraryItems = libraryRes.data ?? [];
+    const authoredBooks = authoredRes.data ?? [];
+
     // Filter and map items
-    let books = (libraryItems ?? [])
-        .map((item: any) => ({
-            ...item.books,
-            isRead: item.is_read,
-            isFavorited: item.is_favorited,
-            isSavedToLibrary: true
-        }))
-        .filter((book: any) => book !== null) as (SupabaseSummary & { isRead: boolean; isFavorited: boolean; isSavedToLibrary: boolean })[];
+    // Process library items
+    const savedBooksMap = new Map();
+
+    libraryItems.forEach((item: any) => {
+        if (item.books) {
+            savedBooksMap.set(item.books.id, {
+                ...item.books,
+                isRead: item.is_read,
+                isFavorited: item.is_favorited,
+                isSavedToLibrary: true,
+                savedAt: item.updated_at
+            });
+        }
+    });
+
+    // Merge authored books
+    // Authored books might not be in user_library, but valid for "My Library" view
+    authoredBooks.forEach((book: any) => {
+        if (!savedBooksMap.has(book.id)) {
+            savedBooksMap.set(book.id, {
+                ...book,
+                isRead: false, // Default, or could fetch from user_read_books if needed
+                isFavorited: false,
+                isSavedToLibrary: false, // It's authored, not explicitly saved? Or treat as saved?
+                // For now, let's treat authored books as part of library but maybe not "saved" via button
+                // actually, for the grid, we want to show them.
+                isAuthored: true
+            });
+        } else {
+            // Updated existing entry to mark as authored
+            const existing = savedBooksMap.get(book.id);
+            savedBooksMap.set(book.id, { ...existing, isAuthored: true });
+        }
+    });
+
+    // Convert map to array and sort
+    let books = Array.from(savedBooksMap.values()) as (SupabaseSummary & {
+        isRead: boolean;
+        isFavorited: boolean;
+        isSavedToLibrary: boolean;
+        isAuthored?: boolean;
+        savedAt?: string;
+    })[];
+
+    // Sort combined list by most recently interacted (saved or created)
+    books.sort((a, b) => {
+        const dateA = new Date(a.savedAt || a.created_at).getTime();
+        const dateB = new Date(b.savedAt || b.created_at).getTime();
+        return dateB - dateA;
+    });
 
     // Apply filters in memory (since we're selecting across a join, it's often easier for simple filters)
     // Or better, we could filter in the query if we change the structure, but this works for now.
