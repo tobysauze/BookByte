@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import { uploadToGoogleDrive } from "@/lib/google-drive-upload";
 
 type GenerateCoverParams = {
   bookId: string;
@@ -276,18 +275,23 @@ export async function maybeGenerateAndSaveCover({
     data: { publicUrl },
   } = admin.storage.from("book-files").getPublicUrl(uploadData.path);
 
-  // Upload to Google Drive (best-effort, don't fail if this errors)
+  // Trigger Google Drive upload via Google Apps Script (best-effort)
+  // The script will handle the actual upload using its OAuth token
   const driveFolderId = process.env.GOOGLE_DRIVE_COVERS_FOLDER_ID;
   if (driveFolderId) {
     try {
       const driveFileName = `${title}${author ? ` by ${author}` : ""}.png`;
-      const driveResult = await uploadToGoogleDrive(bytes, driveFileName, driveFolderId, "image/png");
-      if (driveResult) {
-        console.log(`✅ Cover uploaded to Google Drive: ${driveResult.webViewLink}`);
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || "https://bookbytee.netlify.app";
+      const secret = process.env.GOOGLE_DRIVE_IMPORT_SECRET;
+      
+      if (secret) {
+        // Note: This endpoint requires driveAccessToken, which Google Apps Script will provide
+        // For now, we'll let Google Apps Script poll for new covers
+        // Alternatively, you can call this endpoint from Google Apps Script with the token
+        console.log(`Cover ready for Google Drive upload: ${publicUrl}`);
       }
-    } catch (driveError) {
-      console.warn("Failed to upload cover to Google Drive (continuing anyway):", driveError);
-      // Don't throw - Google Drive upload is optional
+    } catch (error) {
+      console.warn("Failed to prepare Google Drive upload (continuing anyway):", error);
     }
   }
 

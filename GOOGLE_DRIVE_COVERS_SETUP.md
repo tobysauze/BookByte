@@ -4,7 +4,7 @@ This feature automatically saves all generated book covers to a Google Drive fol
 
 ## Features
 
-1. **Automatic Google Drive Backup**: Every generated cover is automatically uploaded to your specified Google Drive folder
+1. **Automatic Google Drive Backup**: Google Apps Script automatically uploads covers to your Drive folder
 2. **Cover Archiving**: When you regenerate a cover, the old one is archived (not deleted) so you can access it later
 3. **Archived Covers Storage**: Old covers are stored in the `archived_covers` JSONB column in the database
 
@@ -20,74 +20,46 @@ ALTER TABLE public.books
 ADD COLUMN IF NOT EXISTS archived_covers JSONB DEFAULT '[]'::jsonb;
 ```
 
-Or use the migration file:
-```bash
-# The migration file is at: db/migration-add-archived-covers.sql
-```
+### 2. Set Up Google Apps Script
 
-### 2. Create Google Cloud Service Account
+1. Go to [Google Apps Script](https://script.google.com)
+2. Create a new project or add to existing project
+3. Copy the code from `google-apps-script/upload-covers-to-drive.gs`
+4. Update Script Properties:
+   - `BOOKBYTE_BASE_URL` - Your BookByte URL (e.g., https://bookbytee.netlify.app)
+   - `BOOKBYTE_IMPORT_SECRET` - Your `GOOGLE_DRIVE_IMPORT_SECRET`
+   - `SUPABASE_URL` - Your Supabase project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+5. Authorize the script (it needs Drive and URL Fetch permissions)
+6. Run `installCoverUploadTrigger()` once to set up automatic uploads every 15 minutes
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the **Google Drive API**:
-   - Go to "APIs & Services" → "Library"
-   - Search for "Google Drive API"
-   - Click "Enable"
-4. Create a Service Account:
-   - Go to "APIs & Services" → "Credentials"
-   - Click "Create Credentials" → "Service Account"
-   - Give it a name (e.g., "bookbyte-drive-uploader")
-   - Click "Create and Continue"
-   - Skip role assignment (click "Continue")
-   - Click "Done"
-5. Create a Key:
-   - Click on the service account you just created
-   - Go to "Keys" tab
-   - Click "Add Key" → "Create new key"
-   - Choose "JSON" format
-   - Download the JSON file
+### 3. Make Google Drive Folder Public (Optional)
 
-### 3. Share Google Drive Folder with Service Account
-
+If you want the folder to be publicly accessible:
 1. Open your Google Drive folder: https://drive.google.com/drive/folders/1OSbTASxMzJsayHr0dlSzx9dqdkp-fMR5
-2. Click "Share" button
-3. Add the service account email (found in the JSON file as `client_email`)
-4. Give it "Editor" permissions
-5. Click "Send"
+2. Click "Share" → "Change to anyone with the link"
+3. Set permission to "Viewer" or "Editor" as needed
 
-### 4. Configure Environment Variables
+### 4. Verify Setup
 
-Add these to your `.env.local` (or Netlify environment variables):
-
-```bash
-# Google Drive folder ID (from the folder URL)
-GOOGLE_DRIVE_COVERS_FOLDER_ID=1OSbTASxMzJsayHr0dlSzx9dqdkp-fMR5
-
-# Service account JSON key (paste the entire JSON content as a single-line string)
-GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY={"client_email":"your-service-account@project.iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","project_id":"your-project-id"}
-```
-
-**Important**: The `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY` must be a single-line JSON string. If you have a multi-line JSON file, convert it to a single line (replace newlines with `\n`).
-
-### 5. Verify Setup
-
-After deploying:
+After setup:
 1. Generate or regenerate a book cover
-2. Check your Google Drive folder - the new cover should appear there
-3. Check the book's `archived_covers` column in Supabase - old covers should be stored there
+2. Wait up to 15 minutes (or run `uploadCoversToDrive()` manually)
+3. Check your Google Drive folder - the new cover should appear there
+4. Check the book's `archived_covers` column in Supabase - old covers should be stored there
 
 ## How It Works
 
 ### Current Cover Storage
 - **Supabase Storage**: Covers are stored in the `book-files` bucket at `${userId}/generated-cover-${bookId}.png`
-- **Google Drive**: A copy is uploaded to your specified folder with filename: `{Title} by {Author}.png`
+- **Google Drive**: Google Apps Script polls for new covers and uploads them automatically with filename: `{Title} by {Author}.png`
 
 ### Cover Archiving
 When you regenerate a cover:
 1. The old cover URL is added to the `archived_covers` array in the database
 2. The old cover file remains in Supabase Storage (not deleted)
 3. The new cover replaces the old one in `cover_url`
-4. The new cover is uploaded to Google Drive
+4. Google Apps Script will upload the new cover to Google Drive on next run
 
 ### Accessing Archived Covers
 
@@ -107,15 +79,10 @@ You can query them via Supabase or add a UI to display them later.
 ## Troubleshooting
 
 ### Covers not uploading to Google Drive
-- Check that `GOOGLE_DRIVE_COVERS_FOLDER_ID` is set correctly
-- Verify `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY` is valid JSON (single-line)
-- Ensure the service account email has access to the folder
-- Check server logs for error messages
-
-### Service Account Authentication Fails
-- Verify the JSON key is correctly formatted
-- Ensure the Google Drive API is enabled in your Google Cloud project
-- Check that the service account has the correct permissions
+- Check that the Google Apps Script trigger is installed
+- Verify Script Properties are set correctly
+- Run `uploadCoversToDrive()` manually to test
+- Check execution logs in Google Apps Script
 
 ### Old Covers Not Archiving
 - Run the database migration to add the `archived_covers` column
