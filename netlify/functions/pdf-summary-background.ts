@@ -194,6 +194,12 @@ function buildPagedText(pages: string[]) {
     .trim();
 }
 
+function clampInt(value: unknown, fallback: number, min: number, max: number) {
+  const n = typeof value === "string" ? Number.parseInt(value, 10) : typeof value === "number" ? Math.trunc(value) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
 async function fetchWithRetries(
   url: string,
   init: RequestInit,
@@ -250,7 +256,23 @@ async function downloadPdf(params: { sourceUrl?: string | null; driveFileId?: st
   throw new Error("Missing sourceUrl or (driveFileId + driveAccessToken).");
 }
 
-async function callKimiApi(params: { model: string; prompt: string; text: string }) {
+type KimiMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+  partial?: boolean;
+  name?: string;
+};
+
+type KimiChatResult = {
+  content: string;
+  finishReason: string | null;
+};
+
+async function callKimiChat(params: {
+  model: string;
+  messages: KimiMessage[];
+  maxTokens: number;
+}) : Promise<KimiChatResult> {
   // Moonshot/Kimi API is OpenAI-compatible. Docs:
   // - Base URL: https://api.moonshot.ai/v1
   // - POST /chat/completions
@@ -267,13 +289,8 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
 
   const body: Record<string, unknown> = {
     model: params.model,
-    messages: [
-      { role: "system", content: "You are a careful, thorough book summarizer. Follow the user prompt exactly." },
-      {
-        role: "user",
-        content: `${params.prompt}\n\n---\n\nPDF TEXT (with page markers):\n${params.text}`,
-      },
-    ],
+    messages: params.messages,
+    max_tokens: params.maxTokens,
   };
 
   // kimi-k2.5 has fixed sampling parameters; sending temperature/top_p/etc can error.
@@ -282,6 +299,12 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
   } else {
     body.temperature = 0.35;
   }
+
+  // Hard timeout so jobs don't get stuck in "running" forever.
+  // If this triggers, the worker will throw and mark the job as error.
+  const timeoutMs = clampInt(process.env.PDF_SUMMARY_KIMI_TIMEOUT_MS, 12 * 60_000, 30_000, 20 * 60_000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   const doRequest = async (baseUrl: string, which: "primary" | "fallback") => {
     const endpoint = `${baseUrl}/chat/completions`;
@@ -295,6 +318,7 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
             "Content-Type": "application/json",
           },
           body: JSON.stringify(body),
+          signal: controller.signal,
         },
         `Kimi API (${which})`,
         3,
@@ -312,6 +336,7 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
     console.warn("[pdf-summary] Primary Kimi base URL failed, trying fallback.", e1);
     res = await doRequest(fallbackBaseUrl, "fallback");
   }
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
@@ -319,7 +344,7 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
   }
 
   const data: unknown = await res.json();
-  const content = (() => {
+  const parsed = (() => {
     if (!data || typeof data !== "object") return null;
     const choices = (data as { choices?: unknown }).choices;
     if (!Array.isArray(choices) || choices.length === 0) return null;
@@ -328,12 +353,16 @@ async function callKimiApi(params: { model: string; prompt: string; text: string
     const message = (first as { message?: unknown }).message;
     if (!message || typeof message !== "object") return null;
     const c = (message as { content?: unknown }).content;
-    return typeof c === "string" ? c : null;
+    const finish = (first as { finish_reason?: unknown }).finish_reason;
+    return {
+      content: typeof c === "string" ? c : null,
+      finishReason: typeof finish === "string" ? finish : null,
+    };
   })();
-  if (typeof content !== "string" || content.trim().length === 0) {
+  if (!parsed || typeof parsed.content !== "string" || parsed.content.trim().length === 0) {
     throw new Error("Kimi API returned empty content.");
   }
-  return content.trim();
+  return { content: parsed.content.trim(), finishReason: parsed.finishReason };
 }
 
 // Netlify background function handler (keep runtime deps minimal).
@@ -362,7 +391,7 @@ export const handler = async (event: { headers?: Record<string, string | undefin
 
     const { data: job, error: jobErr } = await admin
       .from("pdf_summary_jobs")
-      .select("id,status,title,author,model,source_url,source_file_name")
+      .select("id,status,title,author,model,source_url,source_file_name,source_text,result_text,updated_at")
       .eq("id", jobId)
       .single();
 
@@ -374,46 +403,74 @@ export const handler = async (event: { headers?: Record<string, string | undefin
       return { statusCode: 200, body: JSON.stringify({ success: true, status: "done" }) };
     }
 
+    // If a previous run set status=running but then the worker died, the job can get stuck forever.
+    // Treat very old "running" jobs as re-queueable.
+    if (job.status === "running") {
+      const updatedAtMs = job.updated_at ? Date.parse(String(job.updated_at)) : NaN;
+      const staleAfterMs = clampInt(process.env.PDF_SUMMARY_STALE_RUNNING_MS, 30 * 60_000, 60_000, 6 * 60 * 60_000);
+      if (Number.isFinite(updatedAtMs) && Date.now() - updatedAtMs > staleAfterMs) {
+        await admin
+          .from("pdf_summary_jobs")
+          .update({ status: "queued", updated_at: new Date().toISOString() })
+          .eq("id", jobId);
+        (job as any).status = "queued";
+      }
+    }
+
     await admin
       .from("pdf_summary_jobs")
       .update({ status: "running", error_message: null, updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
-    const pdfBuffer = await downloadPdf({
-      sourceUrl: sourceUrl ?? job.source_url ?? null,
-      driveFileId,
-      driveAccessToken,
-    });
+    // Persist extracted text so we can resume multi-chunk generation across invocations.
+    let sourceText = typeof (job as any).source_text === "string" ? ((job as any).source_text as string) : "";
+    if (!sourceText) {
+      const pdfBuffer = await downloadPdf({
+        sourceUrl: sourceUrl ?? job.source_url ?? null,
+        driveFileId,
+        driveAccessToken,
+      });
 
-    const pages: string[] = [];
-    await pdfParse(pdfBuffer, {
-      max: 500,
-      pagerender: async (pageData: unknown) => {
-        const maybeTextContent = await (pageData as { getTextContent?: () => Promise<unknown> }).getTextContent?.();
-        const itemsRaw = maybeTextContent && typeof maybeTextContent === "object"
-          ? (maybeTextContent as { items?: unknown }).items
-          : undefined;
-        const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+      const pages: string[] = [];
+      await pdfParse(pdfBuffer, {
+        max: 500,
+        pagerender: async (pageData: unknown) => {
+          const maybeTextContent = await (pageData as { getTextContent?: () => Promise<unknown> }).getTextContent?.();
+          const itemsRaw = maybeTextContent && typeof maybeTextContent === "object"
+            ? (maybeTextContent as { items?: unknown }).items
+            : undefined;
+          const items = Array.isArray(itemsRaw) ? itemsRaw : [];
 
-        const pageText = items
-          .map((item: unknown) => {
-            if (typeof item === "string") return item;
-            if (item && typeof item === "object" && "str" in item) {
-              const s = (item as { str?: unknown }).str;
-              return typeof s === "string" ? s : "";
-            }
-            return "";
-          })
-          .join(" ")
-          .replace(/\s+/g, " ")
-          .trim();
-        pages.push(pageText);
-        return pageText;
-      },
-    });
+          const pageText = items
+            .map((item: unknown) => {
+              if (typeof item === "string") return item;
+              if (item && typeof item === "object" && "str" in item) {
+                const s = (item as { str?: unknown }).str;
+                return typeof s === "string" ? s : "";
+              }
+              return "";
+            })
+            .join(" ")
+            .replace(/\s+/g, " ")
+            .trim();
+          pages.push(pageText);
+          return pageText;
+        },
+      });
 
-    const pagedText = buildPagedText(pages);
-    if (!pagedText) throw new Error("No text extracted from PDF.");
+      const pagedText = buildPagedText(pages);
+      if (!pagedText) throw new Error("No text extracted from PDF.");
+
+      // If the PDF is extremely large, trim to reduce risk of exceeding context.
+      const MAX_SOURCE_CHARS = clampInt(process.env.PDF_SUMMARY_MAX_SOURCE_CHARS, 1_200_000, 50_000, 2_000_000);
+      sourceText = pagedText.length > MAX_SOURCE_CHARS ? pagedText.slice(0, MAX_SOURCE_CHARS) : pagedText;
+
+      // Store it for future continuation runs.
+      await admin
+        .from("pdf_summary_jobs")
+        .update({ source_text: sourceText, updated_at: new Date().toISOString() })
+        .eq("id", jobId);
+    }
 
     const model =
       (job.model as string) ||
@@ -422,28 +479,44 @@ export const handler = async (event: { headers?: Record<string, string | undefin
       process.env.KIMI_OPENROUTER_MODEL ||
       "kimi-k2.5";
 
-    // If the PDF is extremely large, trim to reduce risk of exceeding context.
-    // Kimi K2.5 supports very large contexts, but this guard avoids worst-case failures.
-    const MAX_CHARS = 1_200_000;
-    const inputText = pagedText.length > MAX_CHARS ? pagedText.slice(0, MAX_CHARS) : pagedText;
+    const existing = typeof (job as any).result_text === "string" ? ((job as any).result_text as string) : "";
+    const maxTokens = clampInt(process.env.PDF_SUMMARY_MAX_TOKENS, 7000, 800, 20000);
 
-    const summaryText = await callKimiApi({
-      model,
-      prompt: DEEP_DIVE_PROMPT,
-      text: inputText,
-    });
+    // Multi-chunk generation:
+    // - Always include the extracted PDF text as context (system message)
+    // - If we already have partial output, use Partial Mode to "prefix" it and continue.
+    const messages: KimiMessage[] = [
+      { role: "system", content: "You are a careful, thorough book summarizer. Follow the user prompt exactly." },
+      { role: "system", content: `PDF TEXT (with page markers):\n${sourceText}` },
+      {
+        role: "user",
+        content:
+          `${DEEP_DIVE_PROMPT}\n\n` +
+          `IMPORTANT: This response may be generated across multiple calls. ` +
+          `Do not repeat yourself. Continue seamlessly where you left off. ` +
+          `Do NOT wrap in markdown code blocks. Output plain text only.`,
+      },
+    ];
+    if (existing.trim().length > 0) {
+      messages.push({ role: "assistant", content: existing, partial: true });
+    }
+
+    const chunk = await callKimiChat({ model, messages, maxTokens });
+    const combined = existing ? `${existing}${existing.endsWith("\n") ? "" : "\n"}${chunk.content}` : chunk.content;
+
+    const isComplete = chunk.finishReason !== "length";
 
     await admin
       .from("pdf_summary_jobs")
       .update({
-        status: "done",
-        result_text: summaryText,
+        status: isComplete ? "done" : "queued",
+        result_text: combined,
         error_message: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", jobId);
 
-    return { statusCode: 200, body: JSON.stringify({ success: true, status: "done" }) };
+    return { statusCode: 200, body: JSON.stringify({ success: true, status: isComplete ? "done" : "queued" }) };
   } catch (err) {
     console.error(err);
     // Best-effort: mark job as errored if we can infer jobId.
