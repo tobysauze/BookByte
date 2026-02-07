@@ -15,6 +15,7 @@ CARD BLURB (CRITICAL):
 [CARD_BLURB]
 <1-3 sentences only, no label, no bullet points, no extra lines>
 [/CARD_BLURB]
+- If you already wrote a [CARD_BLURB] in earlier chunks, do NOT write a second one.
 - After [/CARD_BLURB], continue with the structure below exactly.
 
 STRUCTURE:
@@ -208,6 +209,71 @@ function clampInt(value: unknown, fallback: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+function splitPagedText(sourceText: string) {
+  const text = (sourceText || "").replace(/\r\n/g, "\n");
+  const re = /\[PAGE\s+(\d+)\]\n/gi;
+  const pages: Array<{ page: number; text: string }> = [];
+
+  let lastIdx = 0;
+  let lastPage: number | null = null;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text))) {
+    if (lastPage !== null) {
+      const chunk = text.slice(lastIdx, match.index).trim();
+      pages.push({ page: lastPage, text: chunk });
+    }
+    lastPage = Number(match[1]);
+    lastIdx = match.index + match[0].length;
+  }
+
+  if (lastPage !== null) {
+    const chunk = text.slice(lastIdx).trim();
+    pages.push({ page: lastPage, text: chunk });
+  }
+
+  return pages;
+}
+
+function groupPages(pages: Array<{ page: number; text: string }>, pagesPerGroup: number) {
+  const groups: Array<{ startPage: number; endPage: number; text: string }> = [];
+  if (!pages.length) return groups;
+
+  const sorted = [...pages].sort((a, b) => a.page - b.page);
+  let buf: Array<{ page: number; text: string }> = [];
+  let start = sorted[0]!.page;
+
+  const flush = () => {
+    if (!buf.length) return;
+    const startPage = buf[0]!.page;
+    const endPage = buf[buf.length - 1]!.page;
+    const text = buf
+      .map((p) => `\n\n[PAGE ${p.page}]\n${p.text}`)
+      .join("")
+      .trim();
+    groups.push({ startPage, endPage, text });
+    buf = [];
+  };
+
+  for (const p of sorted) {
+    if (buf.length === 0) {
+      start = p.page;
+      buf.push(p);
+      continue;
+    }
+    const wouldCount = p.page - start + 1;
+    if (wouldCount > pagesPerGroup) {
+      flush();
+      start = p.page;
+      buf.push(p);
+      continue;
+    }
+    buf.push(p);
+  }
+  flush();
+  return groups;
+}
+
 async function fetchWithRetries(
   url: string,
   init: RequestInit,
@@ -275,6 +341,81 @@ type KimiChatResult = {
   content: string;
   finishReason: string | null;
 };
+
+async function estimateKimiTokens(params: { model: string; messages: KimiMessage[] }): Promise<number> {
+  const apiKey = process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing required environment variable: MOONSHOT_API_KEY");
+  }
+
+  const primaryBaseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1").replace(/\/+$/, "");
+  const fallbackBaseUrl = (process.env.MOONSHOT_FALLBACK_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/+$/, "");
+
+  const body = {
+    model: params.model,
+    messages: params.messages,
+  };
+
+  const doRequest = async (baseUrl: string, which: "primary" | "fallback") => {
+    const endpoint = `${baseUrl}/tokenizers/estimate-token-count`;
+    const res = await fetchWithRetries(
+      endpoint,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+      `Kimi token estimate (${which})`,
+      3,
+    );
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(
+        `Kimi token estimate (${which}) error: ${res.status} ${res.statusText}${errText ? ` - ${errText}` : ""}`,
+      );
+    }
+
+    const data: unknown = await res.json();
+    const total = (() => {
+      if (!data || typeof data !== "object") return null;
+      const d = (data as { data?: unknown }).data;
+      if (!d || typeof d !== "object") return null;
+      const t = (d as { total_tokens?: unknown }).total_tokens;
+      return typeof t === "number" ? t : null;
+    })();
+
+    if (typeof total !== "number" || !Number.isFinite(total)) {
+      throw new Error("Kimi token estimate returned invalid total_tokens.");
+    }
+
+    return total;
+  };
+
+  try {
+    return await doRequest(primaryBaseUrl, "primary");
+  } catch (e1) {
+    console.warn("[pdf-summary] Primary token estimate failed, trying fallback.", e1);
+    return await doRequest(fallbackBaseUrl, "fallback");
+  }
+}
+
+function stripOverlap(existing: string, addition: string, window = 8000) {
+  const a = addition || "";
+  if (!existing || !a) return a;
+  const tail = existing.slice(-Math.max(0, window));
+  const max = Math.min(tail.length, a.length);
+
+  // Look for the largest suffix of tail that is a prefix of addition.
+  for (let n = max; n >= 80; n--) {
+    const suffix = tail.slice(-n);
+    if (a.startsWith(suffix)) return a.slice(n);
+  }
+  return a;
+}
 
 async function callKimiChat(params: {
   model: string;
@@ -399,7 +540,7 @@ export const handler = async (event: { headers?: Record<string, string | undefin
 
     const { data: job, error: jobErr } = await admin
       .from("pdf_summary_jobs")
-      .select("id,status,title,author,model,source_url,source_file_name,source_text,result_text,updated_at")
+      .select("*")
       .eq("id", jobId)
       .single();
 
@@ -430,7 +571,7 @@ export const handler = async (event: { headers?: Record<string, string | undefin
       .update({ status: "running", error_message: null, updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
-    // Persist extracted text so we can resume multi-chunk generation across invocations.
+    // Persist extracted text so we can resume across invocations.
     let sourceText = typeof (job as any).source_text === "string" ? ((job as any).source_text as string) : "";
     if (!sourceText) {
       const pdfBuffer = await downloadPdf({
@@ -487,30 +628,321 @@ export const handler = async (event: { headers?: Record<string, string | undefin
       process.env.KIMI_OPENROUTER_MODEL ||
       "kimi-k2.5";
 
-    const existing = typeof (job as any).result_text === "string" ? ((job as any).result_text as string) : "";
-    const maxTokens = clampInt(process.env.PDF_SUMMARY_MAX_TOKENS, 7000, 800, 20000);
+    const desiredMaxTokens = clampInt(process.env.PDF_SUMMARY_MAX_TOKENS, 7000, 800, 20000);
 
-    // Multi-chunk generation:
-    // - Always include the extracted PDF text as context (system message)
-    // - If we already have partial output, use Partial Mode to "prefix" it and continue.
-    const messages: KimiMessage[] = [
-      { role: "system", content: "You are a careful, thorough book summarizer. Follow the user prompt exactly." },
-      { role: "system", content: `PDF TEXT (with page markers):\n${sourceText}` },
-      {
-        role: "user",
-        content:
-          `${DEEP_DIVE_PROMPT}\n\n` +
-          `IMPORTANT: This response may be generated across multiple calls. ` +
-          `Do not repeat yourself. Continue seamlessly where you left off. ` +
-          `Do NOT wrap in markdown code blocks. Output plain text only.`,
-      },
-    ];
-    if (existing.trim().length > 0) {
-      messages.push({ role: "assistant", content: existing, partial: true });
+    // Hybrid mode:
+    // - Prefer full-PDF continuation when it fits comfortably.
+    // - Switch to multi-pass digest/write when the token budget gets tight (higher reliability + coverage).
+    // Requires DB columns from migration-add-pdf-summary-jobs-digests.sql.
+    const hasDigestColumns = Object.prototype.hasOwnProperty.call(job as any, "digest_parts");
+    if (hasDigestColumns) {
+      let stage = typeof (job as any).stage === "string" ? ((job as any).stage as string) : "";
+      const stageCursor = typeof (job as any).stage_cursor === "number" ? ((job as any).stage_cursor as number) : 0;
+      const digestPartsRaw = (job as any).digest_parts;
+      const digestParts: Array<{ startPage: number; endPage: number; text: string }> =
+        Array.isArray(digestPartsRaw) ? digestPartsRaw : [];
+
+      // Choose a stage for new jobs / jobs without a stage.
+      if (!stage) {
+        const MODEL_CONTEXT_LIMIT = 262_144;
+        const SAFETY_MARGIN = clampInt(process.env.PDF_SUMMARY_TOKEN_MARGIN, 2048, 512, 8192);
+        const desiredMax = desiredMaxTokens;
+        const reserveForFuture = clampInt(process.env.PDF_SUMMARY_RESERVE_TOKENS, 10_000, 2000, 50_000);
+
+        // Estimate token cost of full PDF + prompt (no "summary so far" yet).
+        let sourceChars = Math.min(
+          sourceText.length,
+          clampInt(process.env.PDF_FULL_MAX_SOURCE_CHARS, 1_200_000, 50_000, 2_000_000),
+        );
+
+        const buildFullMessages = () =>
+          ([
+            { role: "system", content: "You are a careful, thorough book summarizer. Follow the user prompt exactly." },
+            { role: "system", content: `PDF TEXT (with page markers):\n${sourceText.slice(0, sourceChars)}` },
+            { role: "user", content: `${DEEP_DIVE_PROMPT}` },
+          ] as KimiMessage[]);
+
+        let fullMessages = buildFullMessages();
+        let fullInputTokens = await estimateKimiTokens({ model, messages: fullMessages });
+        let loops = 0;
+        while (loops < 6) {
+          loops++;
+          const remaining = MODEL_CONTEXT_LIMIT - fullInputTokens - SAFETY_MARGIN;
+          // If we can fit a decent chunk AND keep a reserve for later continuation, stay in full-PDF mode.
+          if (remaining >= desiredMax + reserveForFuture) break;
+          if (sourceChars <= 200_000) break;
+          sourceChars = Math.max(200_000, Math.floor(sourceChars * 0.8));
+          fullMessages = buildFullMessages();
+          fullInputTokens = await estimateKimiTokens({ model, messages: fullMessages });
+        }
+
+        const remaining = MODEL_CONTEXT_LIMIT - fullInputTokens - SAFETY_MARGIN;
+        stage = remaining >= desiredMax + reserveForFuture ? "full" : "digest";
+
+        await admin
+          .from("pdf_summary_jobs")
+          .update({ stage, stage_cursor: 0, updated_at: new Date().toISOString(), status: "queued" })
+          .eq("id", jobId);
+      }
+
+      const pagesPerGroup = clampInt(process.env.PDF_DIGEST_PAGES_PER_GROUP, 20, 5, 80);
+      const pages = splitPagedText(sourceText);
+      const groups = groupPages(pages, pagesPerGroup);
+
+      // Stage "full": keep using the full-PDF continuation path (below).
+      if (stage === "full") {
+        // fall through to the "Fallback" implementation by breaking out of this block
+      } else {
+      // Stage 1: build per-group digests (grounded, detailed notes with page refs).
+      if (stage === "digest") {
+        if (stageCursor >= groups.length) {
+          await admin
+            .from("pdf_summary_jobs")
+            .update({
+              stage: "write",
+              stage_cursor: 0,
+              updated_at: new Date().toISOString(),
+              status: "queued",
+            })
+            .eq("id", jobId);
+          return { statusCode: 200, body: JSON.stringify({ success: true, status: "queued" }) };
+        }
+
+        const g = groups[stageCursor]!;
+        const digestPrompt =
+          `You are creating a HIGH-FIDELITY reading digest for a section of a book.\n\n` +
+          `Input is raw extracted text with page markers.\n\n` +
+          `Write a dense digest for pages ${g.startPage}-${g.endPage}.\n` +
+          `Requirements:\n` +
+          `- Capture all key claims, definitions, frameworks, examples, and any numbers.\n` +
+          `- Keep page references when possible (e.g. “(p. ${g.startPage})” or “(pages ${g.startPage}-${g.endPage})”).\n` +
+          `- No fluff, no preamble.\n` +
+          `- Output plain text only.\n`;
+
+        const digestMessages: KimiMessage[] = [
+          { role: "system", content: "You are a careful, thorough reading analyst." },
+          { role: "user", content: `${digestPrompt}\n\nTEXT:\n${g.text}` },
+        ];
+
+        const digestMaxTokens = clampInt(process.env.PDF_DIGEST_MAX_TOKENS, 3500, 800, 8000);
+        const digest = await callKimiChat({ model, messages: digestMessages, maxTokens: digestMaxTokens });
+
+        const nextParts = digestParts.concat([{ startPage: g.startPage, endPage: g.endPage, text: digest.content }]);
+
+        await admin
+          .from("pdf_summary_jobs")
+          .update({
+            digest_parts: nextParts,
+            stage_cursor: stageCursor + 1,
+            status: "queued",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+
+        return { statusCode: 200, body: JSON.stringify({ success: true, status: "queued" }) };
+      }
+
+      // Stage 2: write the deep-dive summary using the digests as grounded context.
+      if (stage === "write") {
+        const existing = typeof (job as any).result_text === "string" ? ((job as any).result_text as string) : "";
+
+        const digestsJoined = digestParts
+          .map((d) => `\n\n[DIGEST pages ${d.startPage}-${d.endPage}]\n${d.text}`)
+          .join("")
+          .trim();
+
+        // Token-safe continuation using digests (not the full raw PDF).
+        const MODEL_CONTEXT_LIMIT = 262_144;
+        const SAFETY_MARGIN = clampInt(process.env.PDF_SUMMARY_TOKEN_MARGIN, 2048, 512, 8192);
+        const MIN_OUTPUT_TOKENS = clampInt(process.env.PDF_SUMMARY_MIN_OUTPUT_TOKENS, 800, 200, 4000);
+
+        const partialMaxChars = clampInt(process.env.PDF_SUMMARY_PARTIAL_MAX_CHARS, 18_000, 0, 120_000);
+        let tailChars = clampInt(process.env.PDF_SUMMARY_EXISTING_TAIL_CHARS, 12_000, 0, 120_000);
+
+        let digestChars = Math.min(
+          digestsJoined.length,
+          clampInt(process.env.PDF_SUMMARY_MAX_DIGEST_CHARS, 900_000, 50_000, 2_000_000),
+        );
+
+        const buildMessages = () => {
+          const baseDigests = digestsJoined.slice(0, digestChars);
+          const msgs: KimiMessage[] = [
+            { role: "system", content: "You are a careful, thorough book summarizer. Follow the user prompt exactly." },
+            { role: "system", content: `GROUNDING DIGESTS (do not quote verbatim; use as evidence):\n${baseDigests}` },
+            {
+              role: "user",
+              content:
+                `${DEEP_DIVE_PROMPT}\n\n` +
+                `IMPORTANT: This response may be generated across multiple calls. ` +
+                `Do not repeat yourself. Continue seamlessly where you left off. ` +
+                `Do NOT wrap in markdown code blocks. Output plain text only.`,
+            },
+          ];
+
+          if (existing.trim().length > 0) {
+            if (existing.length <= partialMaxChars) {
+              msgs.push({ role: "assistant", content: existing, partial: true });
+            } else {
+              const tail = existing.slice(-Math.max(0, tailChars));
+              msgs.push({
+                role: "system",
+                content:
+                  `SUMMARY_SO_FAR_TAIL (do NOT output this):\n${tail}\n\n` +
+                  `Continue from the end of the summary so far. Do not repeat content already written.`,
+              });
+            }
+          }
+
+          return msgs;
+        };
+
+        let messages = buildMessages();
+        let inputTokens = await estimateKimiTokens({ model, messages });
+        let loops = 0;
+        while (loops < 8) {
+          loops++;
+          const remaining = MODEL_CONTEXT_LIMIT - inputTokens - SAFETY_MARGIN;
+          if (remaining >= MIN_OUTPUT_TOKENS) break;
+
+          if (digestChars > 120_000) {
+            digestChars = Math.max(120_000, Math.floor(digestChars * 0.75));
+          } else if (tailChars > 2_000) {
+            tailChars = Math.max(2_000, Math.floor(tailChars * 0.7));
+          } else {
+            break;
+          }
+
+          messages = buildMessages();
+          inputTokens = await estimateKimiTokens({ model, messages });
+        }
+
+        const remaining = Math.max(0, MODEL_CONTEXT_LIMIT - inputTokens - SAFETY_MARGIN);
+        const maxTokens = Math.max(MIN_OUTPUT_TOKENS, Math.min(desiredMaxTokens, remaining));
+
+        const chunk = await callKimiChat({ model, messages, maxTokens });
+
+        const addition = stripOverlap(existing, chunk.content);
+        const combined = existing ? `${existing}${existing.endsWith("\n") ? "" : "\n"}${addition}` : chunk.content;
+        const isComplete = chunk.finishReason !== "length";
+
+        await admin
+          .from("pdf_summary_jobs")
+          .update({
+            status: isComplete ? "done" : "queued",
+            result_text: combined,
+            error_message: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+
+        return { statusCode: 200, body: JSON.stringify({ success: true, status: isComplete ? "done" : "queued" }) };
+      }
+      }
     }
 
-    const chunk = await callKimiChat({ model, messages, maxTokens });
-    const combined = existing ? `${existing}${existing.endsWith("\n") ? "" : "\n"}${chunk.content}` : chunk.content;
+    // Full-PDF continuation (also used when digest columns exist but stage === "full"):
+    // - Keep a bounded amount of context from the already-generated output to avoid exceeding 262k context.
+    // - If the existing output is small, Partial Mode works well.
+    // - If the output is large, use only a tail snippet as guidance (NOT partial mode).
+    const existing = typeof (job as any).result_text === "string" ? ((job as any).result_text as string) : "";
+    const MODEL_CONTEXT_LIMIT = 262_144;
+    const SAFETY_MARGIN = clampInt(process.env.PDF_SUMMARY_TOKEN_MARGIN, 2048, 512, 8192);
+    const MIN_OUTPUT_TOKENS = clampInt(process.env.PDF_SUMMARY_MIN_OUTPUT_TOKENS, 800, 200, 4000);
+
+    const partialMaxChars = clampInt(process.env.PDF_SUMMARY_PARTIAL_MAX_CHARS, 18_000, 0, 120_000);
+    let tailChars = clampInt(process.env.PDF_SUMMARY_EXISTING_TAIL_CHARS, 12_000, 0, 120_000);
+
+    // We may need to truncate sourceText further for token budget.
+    let sourceChars = Math.min(
+      sourceText.length,
+      clampInt(process.env.PDF_SUMMARY_MAX_SOURCE_CHARS, 900_000, 50_000, 2_000_000),
+    );
+
+    const buildMessages = () => {
+      const baseSource = sourceText.slice(0, sourceChars);
+      const msgs: KimiMessage[] = [
+        { role: "system", content: "You are a careful, thorough book summarizer. Follow the user prompt exactly." },
+        { role: "system", content: `PDF TEXT (with page markers):\n${baseSource}` },
+        {
+          role: "user",
+          content:
+            `${DEEP_DIVE_PROMPT}\n\n` +
+            `IMPORTANT: This response may be generated across multiple calls. ` +
+            `Do not repeat yourself. Continue seamlessly where you left off. ` +
+            `Do NOT wrap in markdown code blocks. Output plain text only.`,
+        },
+      ];
+
+      if (existing.trim().length > 0) {
+        if (existing.length <= partialMaxChars) {
+          msgs.push({ role: "assistant", content: existing, partial: true });
+        } else {
+          const tail = existing.slice(-Math.max(0, tailChars));
+          msgs.push({
+            role: "system",
+            content:
+              `SUMMARY_SO_FAR_TAIL (do NOT output this):\n${tail}\n\n` +
+              `Continue from the end of the summary so far. Do not repeat content already written.`,
+          });
+        }
+      }
+
+      return msgs;
+    };
+
+    // Iteratively fit within the model context window.
+    let messages = buildMessages();
+    let inputTokens = await estimateKimiTokens({ model, messages });
+    let loops = 0;
+    while (loops < 8) {
+      loops++;
+      const remaining = MODEL_CONTEXT_LIMIT - inputTokens - SAFETY_MARGIN;
+      if (remaining >= MIN_OUTPUT_TOKENS) break;
+
+      // Reduce source text first (biggest contributor)
+      if (sourceChars > 120_000) {
+        sourceChars = Math.max(120_000, Math.floor(sourceChars * 0.75));
+      } else if (tailChars > 2_000) {
+        tailChars = Math.max(2_000, Math.floor(tailChars * 0.7));
+      } else {
+        break;
+      }
+
+      messages = buildMessages();
+      inputTokens = await estimateKimiTokens({ model, messages });
+    }
+
+    const remaining = Math.max(0, MODEL_CONTEXT_LIMIT - inputTokens - SAFETY_MARGIN);
+    const maxTokens = Math.max(MIN_OUTPUT_TOKENS, Math.min(desiredMaxTokens, remaining));
+
+    let chunk: KimiChatResult;
+    try {
+      chunk = await callKimiChat({ model, messages, maxTokens });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // If we ever hit the hard context limit, switch this job into digest mode automatically (if supported).
+      if (
+        msg.includes("exceeded model token limit") &&
+        Object.prototype.hasOwnProperty.call(job as any, "digest_parts")
+      ) {
+        await admin
+          .from("pdf_summary_jobs")
+          .update({
+            stage: "digest",
+            stage_cursor: 0,
+            digest_parts: [],
+            status: "queued",
+            error_message: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+        return { statusCode: 200, body: JSON.stringify({ success: true, status: "queued" }) };
+      }
+      throw e;
+    }
+
+    const addition = stripOverlap(existing, chunk.content);
+    const combined = existing ? `${existing}${existing.endsWith("\n") ? "" : "\n"}${addition}` : chunk.content;
 
     const isComplete = chunk.finishReason !== "length";
 
