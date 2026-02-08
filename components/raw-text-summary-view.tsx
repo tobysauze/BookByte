@@ -10,7 +10,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
-import { Menu } from "lucide-react";
+import { Menu, List } from "lucide-react";
 
 export function RawTextSummaryView({ bookId, content }: { bookId: string; content: string }) {
     const { highlights, refreshHighlights } = useHighlights(bookId);
@@ -167,18 +167,15 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
 
     return (
         <div className="flex flex-col lg:flex-row gap-4">
-            {/* Mobile Contents Button */}
-            <div className="lg:hidden flex justify-center mb-2">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsTocOpen(true)}
-                    className="w-full sm:w-auto"
-                >
-                    <Menu className="h-4 w-4 mr-2" />
-                    Contents
-                </Button>
-            </div>
+            {/* Fixed side handle to open contents - visible on mobile only */}
+            <button
+                type="button"
+                onClick={() => setIsTocOpen(true)}
+                className="lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] pl-1.5 pr-2 py-3 rounded-r-lg shadow-lg hover:pl-2.5 transition-all"
+                title="Open Contents"
+            >
+                <List className="h-4 w-4" />
+            </button>
 
             {/* Mobile TOC - Sheet drawer */}
             <Sheet open={isTocOpen} onOpenChange={setIsTocOpen}>

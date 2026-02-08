@@ -9,7 +9,7 @@ import { EditableSummaryContent } from "@/components/editable-summary-content";
 import { ContinuousScrollView } from "@/components/continuous-scroll-view";
 import { ContentsMenu } from "@/components/contents-menu";
 import { TextSettings } from "@/components/text-settings";
-import { Scroll, BookOpen, Menu } from "lucide-react";
+import { Scroll, BookOpen, List } from "lucide-react";
 import { z } from "zod";
 import type { SupabaseSummary } from "@/lib/supabase";
 import type { SummaryPayload } from "@/lib/schemas";
@@ -360,18 +360,15 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
 
   return (
     <div className="space-y-6">
-      {/* Mobile Contents Button - Only show on mobile */}
-      <div className="lg:hidden flex justify-center">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsContentsOpen(true)}
-          className="w-full sm:w-auto"
-        >
-          <Menu className="h-4 w-4 mr-2" />
-          Contents
-        </Button>
-      </div>
+      {/* Fixed side handle to open contents - visible on mobile only */}
+      <button
+        type="button"
+        onClick={() => setIsContentsOpen(true)}
+        className="lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] pl-1.5 pr-2 py-3 rounded-r-lg shadow-lg hover:pl-2.5 transition-all"
+        title="Open Contents"
+      >
+        <List className="h-4 w-4" />
+      </button>
 
       {/* Action Buttons */}
       <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
