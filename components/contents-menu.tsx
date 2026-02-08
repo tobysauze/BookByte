@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { BookOpen, Lightbulb, List, Target, Quote, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -55,6 +56,28 @@ export function ContentsMenu({
   onClose,
   isOpen,
 }: ContentsMenuProps) {
+  // Prevent body scroll when menu is open
+  useEffect(() => {
+    if (isOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      // Prevent scrolling
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        // Restore scroll position when menu closes
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
   
   // Ensure summary is structured
@@ -81,9 +104,9 @@ export function ContentsMenu({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/50" onClick={onClose}>
       <div 
-        className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-[rgb(var(--background))] border-r border-[rgb(var(--border))] overflow-y-auto shadow-xl"
+        className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-[rgb(var(--background))] border-r border-[rgb(var(--border))] overflow-y-auto shadow-2xl z-[101]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
