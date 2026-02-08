@@ -4,12 +4,18 @@ import { useMemo, useRef, useState } from "react";
 import { useHighlights } from "@/lib/use-highlights";
 import { HighlightableText } from "@/components/highlightable-text";
 import { Button } from "@/components/ui/button";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 
 export function RawTextSummaryView({ bookId, content }: { bookId: string; content: string }) {
     const { highlights, refreshHighlights } = useHighlights(bookId);
     const textContainerRef = useRef<HTMLDivElement | null>(null);
-    const [isCollapsed, setIsCollapsed] = useState(true); // Start collapsed on mobile
+    const [isTocOpen, setIsTocOpen] = useState(false);
 
     const displayContent = useMemo(() => {
         // Hide the card blurb tags from the main reading view.
@@ -153,6 +159,12 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         });
     };
 
+    const handleTocItemClick = (charOffset: number) => {
+        setIsTocOpen(false); // Close the sheet first
+        // Small delay to let the sheet close before scrolling
+        setTimeout(() => scrollToOffset(charOffset), 300);
+    };
+
     return (
         <div className="flex flex-col lg:flex-row gap-4">
             {/* Mobile Contents Button */}
@@ -160,59 +172,77 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    onClick={() => setIsTocOpen(true)}
                     className="w-full sm:w-auto"
                 >
                     <Menu className="h-4 w-4 mr-2" />
-                    {isCollapsed ? "Show Contents" : "Hide Contents"}
+                    Contents
                 </Button>
             </div>
 
-            {/* Deep-dive table of contents - Collapsible on mobile */}
-            {!isCollapsed && (
-                <aside
-                    className={`lg:block sticky top-20 lg:top-24 h-auto lg:h-[calc(100vh-6rem)] flex-shrink-0 overflow-y-auto rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 transition-all duration-300 w-full lg:w-80 mb-4 lg:mb-0`}
-                >
-                    <div className="flex items-center justify-between gap-2 mb-4">
-                        <div className="text-sm font-semibold">Contents</div>
-                        <button
-                            type="button"
-                            onClick={() => setIsCollapsed(true)}
-                            className="lg:hidden rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-1 text-xs text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]"
-                        >
-                            ×
-                        </button>
-                    </div>
-
-                    <div className="space-y-1">
+            {/* Mobile TOC - Sheet drawer */}
+            <Sheet open={isTocOpen} onOpenChange={setIsTocOpen}>
+                <SheetContent side="left" className="w-80 max-w-[85vw] overflow-y-auto p-0">
+                    <SheetHeader className="p-6 pb-4">
+                        <SheetTitle>Contents</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-4 pb-6 space-y-1">
                         {toc.length ? (
                             toc.map((item) => (
                                 <button
                                     key={item.id}
                                     type="button"
-                                    onClick={() => {
-                                        scrollToOffset(item.offset);
-                                        setIsCollapsed(true); // Close on mobile after clicking
-                                    }}
-                                    className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[rgb(var(--muted))] ${item.level === 1
-                                            ? "font-semibold"
-                                            : item.level === 2
-                                                ? "pl-5 text-[rgb(var(--foreground))]"
-                                                : "pl-8 text-[rgb(var(--muted-foreground))]"
-                                        }`}
+                                    onClick={() => handleTocItemClick(item.offset)}
+                                    className={`w-full rounded-lg px-3 py-2.5 text-left text-sm hover:bg-[rgb(var(--muted))] ${item.level === 1
+                                        ? "font-semibold"
+                                        : item.level === 2
+                                            ? "pl-5 text-[rgb(var(--foreground))]"
+                                            : "pl-8 text-[rgb(var(--muted-foreground))]"
+                                    }`}
                                     title={item.label}
                                 >
                                     {item.label}
                                 </button>
                             ))
                         ) : (
-                            <div className="text-xs text-[rgb(var(--muted-foreground))]">
-                                No headings detected yet. Add headings like “PART 1:” or “Chapter 1:” to enable navigation.
+                            <div className="text-xs text-[rgb(var(--muted-foreground))] px-3">
+                                No headings detected yet.
                             </div>
                         )}
                     </div>
-                </aside>
-            )}
+                </SheetContent>
+            </Sheet>
+
+            {/* Desktop sidebar TOC - always visible on large screens */}
+            <aside
+                className="hidden lg:block sticky top-24 h-[calc(100vh-6rem)] flex-shrink-0 overflow-y-auto rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 w-80"
+            >
+                <div className="text-sm font-semibold mb-4">Contents</div>
+                <div className="space-y-1">
+                    {toc.length ? (
+                        toc.map((item) => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => scrollToOffset(item.offset)}
+                                className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[rgb(var(--muted))] ${item.level === 1
+                                    ? "font-semibold"
+                                    : item.level === 2
+                                        ? "pl-5 text-[rgb(var(--foreground))]"
+                                        : "pl-8 text-[rgb(var(--muted-foreground))]"
+                                }`}
+                                title={item.label}
+                            >
+                                {item.label}
+                            </button>
+                        ))
+                    ) : (
+                        <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                            No headings detected yet. Add headings like "PART 1:" or "Chapter 1:" to enable navigation.
+                        </div>
+                    )}
+                </div>
+            </aside>
 
             {/* Main content */}
             <div className="flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 sm:p-6 lg:p-8">
