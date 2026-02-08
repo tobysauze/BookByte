@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { BookOpen, Lightbulb, List, Target, Quote, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -61,18 +62,36 @@ export function ContentsMenu({
     if (isOpen) {
       // Save current scroll position
       const scrollY = window.scrollY;
-      // Prevent scrolling
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = '100%';
-      document.body.style.overflow = 'hidden';
+      const html = document.documentElement;
+      const body = document.body;
+      
+      // Prevent scrolling on both html and body (for better mobile support)
+      html.style.position = 'fixed';
+      html.style.top = `-${scrollY}px`;
+      html.style.width = '100%';
+      html.style.overflow = 'hidden';
+      html.style.touchAction = 'none'; // Prevent touch scrolling on mobile
+      
+      body.style.position = 'fixed';
+      body.style.top = `-${scrollY}px`;
+      body.style.width = '100%';
+      body.style.overflow = 'hidden';
+      body.style.touchAction = 'none';
       
       return () => {
         // Restore scroll position when menu closes
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-        document.body.style.overflow = '';
+        html.style.position = '';
+        html.style.top = '';
+        html.style.width = '';
+        html.style.overflow = '';
+        html.style.touchAction = '';
+        
+        body.style.position = '';
+        body.style.top = '';
+        body.style.width = '';
+        body.style.overflow = '';
+        body.style.touchAction = '';
+        
         window.scrollTo(0, scrollY);
       };
     }
@@ -103,11 +122,21 @@ export function ContentsMenu({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-black/50" onClick={onClose}>
+  // Use portal to render at document root level, ensuring it's always on top
+  const menuContent = (
+    <div 
+      className="fixed inset-0 z-[9999] bg-black/50" 
+      onClick={onClose}
+      style={{ touchAction: 'none' }}
+    >
       <div 
-        className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-[rgb(var(--background))] border-r border-[rgb(var(--border))] overflow-y-auto shadow-2xl z-[101]"
+        className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-[rgb(var(--background))] border-r border-[rgb(var(--border))] overflow-y-auto shadow-2xl z-[10000]"
         onClick={(e) => e.stopPropagation()}
+        style={{ touchAction: 'auto' }}
+        onTouchMove={(e) => {
+          // Allow scrolling within the menu itself
+          e.stopPropagation();
+        }}
       >
         <div className="p-6">
           {/* Header */}
@@ -299,6 +328,13 @@ export function ContentsMenu({
       </div>
     </div>
   );
+
+  // Render using portal to ensure it's always on top
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return createPortal(menuContent, document.body);
 }
 
 

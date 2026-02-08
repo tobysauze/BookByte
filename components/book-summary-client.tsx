@@ -434,7 +434,10 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
           </div>
 
           {/* Main Summary Content */}
-          <div className="flex-1 lg:pl-2 w-full">
+          <div 
+            className={`flex-1 lg:pl-2 w-full ${isContentsOpen ? 'pointer-events-none' : ''}`}
+            style={isContentsOpen ? { zIndex: -1 } : {}}
+          >
             {isContinuousScroll ? (
               <ContinuousScrollView
                 book={book}
