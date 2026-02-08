@@ -17,6 +17,19 @@ type RatingData = {
   updated_at: string;
 } | null;
 
+// Mood info for each rating level
+function getMoodEmoji(num: number): string {
+  if (num <= 2) return "😫";
+  if (num <= 3) return "😟";
+  if (num <= 4) return "😐";
+  if (num <= 5) return "🙂";
+  if (num <= 6) return "😊";
+  if (num <= 7) return "😄";
+  if (num <= 8) return "🤩";
+  if (num <= 9) return "🔥";
+  return "💎";
+}
+
 export function SummaryRating({ bookId }: SummaryRatingProps) {
   const [rating, setRating] = useState<number | null>(null);
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
@@ -24,14 +37,20 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [currentRating, setCurrentRating] = useState<RatingData>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     const loadRating = async () => {
       try {
         const meRes = await fetch("/api/me");
         const me = (await meRes.json().catch(() => ({}))) as { user?: unknown | null };
-        if (!me?.user) return;
+        if (!me?.user) {
+          setIsLoggedIn(false);
+          return;
+        }
+        setIsLoggedIn(true);
 
         const response = await fetch(`/api/books/${bookId}/rating`);
         if (response.ok) {
@@ -60,6 +79,7 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
 
     setIsSaving(true);
     setError(null);
+    setShowSuccess(false);
 
     try {
       const response = await fetch(`/api/books/${bookId}/rating`, {
@@ -81,6 +101,8 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
       const data = await response.json();
       setCurrentRating(data.rating);
       setError(null);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
     } catch (err) {
       console.error("Error saving rating:", err);
       setError(err instanceof Error ? err.message : "Failed to save rating.");
@@ -90,27 +112,35 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4">
-        <div className="text-sm text-[rgb(var(--muted-foreground))]">Loading rating...</div>
-      </div>
-    );
+    return null; // Don't show loading state to keep the page clean
   }
 
+  if (!isLoggedIn) {
+    return null; // Don't show to logged-out users
+  }
+
+  const displayRating = hoveredRating ?? rating;
+
   return (
-    <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <Label className="text-sm font-semibold">Rate This Summary</Label>
-        {currentRating && (
-          <span className="text-xs text-[rgb(var(--muted-foreground))]">
-            Last updated: {new Date(currentRating.updated_at).toLocaleDateString()}
-          </span>
-        )}
+    <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 sm:p-8 space-y-6">
+      {/* Header */}
+      <div className="text-center space-y-2">
+        <h3 className="text-xl sm:text-2xl font-bold">How was this summary?</h3>
+        <p className="text-sm text-[rgb(var(--muted-foreground))]">
+          Your feedback helps us improve our summaries
+        </p>
       </div>
 
-      <div className="space-y-2">
-        <Label className="text-sm">Rating (1-10)</Label>
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* Emoji display */}
+      <div className="flex justify-center">
+        <span className="text-5xl sm:text-6xl transition-all duration-200" role="img" aria-label="mood">
+          {displayRating ? getMoodEmoji(displayRating) : "🤔"}
+        </span>
+      </div>
+
+      {/* Rating buttons */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
             const isSelected = rating === num;
             const isHovered = hoveredRating === num;
@@ -125,12 +155,12 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
                 onMouseLeave={() => setHoveredRating(null)}
                 disabled={isSaving}
                 className={`
-                  w-10 h-10 rounded-lg border-2 transition-all
+                  w-9 h-9 sm:w-11 sm:h-11 rounded-full border-2 transition-all duration-150
                   ${shouldHighlight
-                    ? "bg-[rgb(var(--accent))] text-white border-[rgb(var(--accent))] scale-110"
-                    : "bg-[rgb(var(--muted))] border-[rgb(var(--border))] hover:border-[rgb(var(--accent))]"
+                    ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] border-[rgb(var(--accent))] scale-110 shadow-md"
+                    : "bg-[rgb(var(--muted))] border-[rgb(var(--border))] hover:border-[rgb(var(--accent))] hover:scale-105"
                   }
-                  font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed
+                  font-semibold text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed
                 `}
               >
                 {num}
@@ -138,20 +168,13 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
             );
           })}
         </div>
-        <div className="flex items-center justify-between text-xs text-[rgb(var(--muted-foreground))]">
+        <div className="flex items-center justify-between text-xs text-[rgb(var(--muted-foreground))] px-2">
           <span>Poor</span>
           <span>Excellent</span>
         </div>
       </div>
 
-      {rating !== null && (
-        <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--muted))]/30 p-3">
-          <p className="text-sm">
-            Selected: <span className="font-semibold">{rating}/10</span>
-          </p>
-        </div>
-      )}
-
+      {/* Notes */}
       <div className="space-y-2">
         <Label htmlFor="rating-notes" className="text-sm">
           Notes (Optional)
@@ -160,27 +183,42 @@ export function SummaryRating({ bookId }: SummaryRatingProps) {
           id="rating-notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Add any notes about this summary..."
+          placeholder="What did you think of this summary?"
           disabled={isSaving}
-          className="min-h-[80px] text-sm"
+          className="min-h-[80px] text-sm resize-none"
         />
       </div>
 
+      {/* Error */}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50/60 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
+      {/* Success */}
+      {showSuccess && (
+        <div className="rounded-lg border border-green-200 bg-green-50/60 p-3 text-sm text-green-700 text-center">
+          Thank you for your rating!
+        </div>
+      )}
+
+      {/* Submit */}
       <Button
         onClick={handleSubmit}
         disabled={isSaving || rating === null}
         className="w-full"
-        size="sm"
+        size="lg"
       >
         {isSaving ? "Saving..." : currentRating ? "Update Rating" : "Submit Rating"}
       </Button>
+
+      {/* Last updated info */}
+      {currentRating && (
+        <p className="text-xs text-center text-[rgb(var(--muted-foreground))]">
+          You rated this {currentRating.rating}/10 on {new Date(currentRating.updated_at).toLocaleDateString()}
+        </p>
+      )}
     </div>
   );
 }
-

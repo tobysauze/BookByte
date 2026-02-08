@@ -5,6 +5,7 @@ import { BookHeroClient } from "@/components/book-hero-client";
 import { BookAnalysis } from "@/components/book-analysis";
 import { EnhanceSummaryButton } from "@/components/enhance-summary-button";
 import { SummaryRating } from "@/components/summary-rating";
+import { AverageRatingBadge } from "@/components/average-rating-badge";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import type { SupabaseSummary } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
@@ -84,12 +85,10 @@ export default async function BookDetailPage({ params }: BookPageParams) {
         initialIsRead={isRead}
         initialIsFavorited={isFavorited}
       />
-      
-      {/* Summary Rating - Only for editors, at the top */}
-      {userRole === "editor" && (
-        <div className="max-w-2xl mx-auto">
-          <SummaryRating bookId={typedBook.id} />
-        </div>
+
+      {/* Average Rating Badge - visible to everyone at the top */}
+      {typedBook.summary && (
+        <AverageRatingBadge bookId={typedBook.id} />
       )}
       
       <BookSummaryClient book={typedBook} canEdit={canEdit} />
@@ -107,6 +106,13 @@ export default async function BookDetailPage({ params }: BookPageParams) {
           bookId={typedBook.id} 
           initialResults={typedBook.analysis_results as any}
         />
+      )}
+
+      {/* Summary Rating - at the bottom, after all content */}
+      {user && typedBook.summary && (
+        <div className="max-w-2xl mx-auto">
+          <SummaryRating bookId={typedBook.id} />
+        </div>
       )}
     </div>
   );

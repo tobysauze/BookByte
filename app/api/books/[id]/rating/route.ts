@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
-import { getUserRole } from "@/lib/user-roles";
 
 export const runtime = "nodejs";
 
@@ -19,15 +18,6 @@ export async function POST(
       return NextResponse.json(
         { error: "You must be logged in to rate summaries." },
         { status: 401 }
-      );
-    }
-
-    // Check if user is an editor
-    const userRole = await getUserRole();
-    if (userRole !== "editor") {
-      return NextResponse.json(
-        { error: "Only editors can rate summaries." },
-        { status: 403 }
       );
     }
 
@@ -96,15 +86,6 @@ export async function GET(
       return NextResponse.json(
         { error: "You must be logged in to view ratings." },
         { status: 401 }
-      );
-    }
-
-    // Check if user is an editor
-    const userRole = await getUserRole();
-    if (userRole !== "editor") {
-      return NextResponse.json(
-        { error: "Only editors can view ratings." },
-        { status: 403 }
       );
     }
 
