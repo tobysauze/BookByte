@@ -62,7 +62,7 @@ export function ContinuousScrollView({ book, canEdit = false }: ContinuousScroll
   };
 
   return (
-    <div className="space-y-12 pb-12">
+    <div className="space-y-8 sm:space-y-12 pb-8 sm:pb-12">
       {/* Quick Summary */}
       {summary.quick_summary && (
         <section id="quick-summary" className="scroll-mt-8">
@@ -86,7 +86,7 @@ export function ContinuousScrollView({ book, canEdit = false }: ContinuousScroll
       {summary.key_ideas && summary.key_ideas.length > 0 && (
         <section id="key-ideas" className="scroll-mt-8">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 pb-4 border-b border-[rgb(var(--border))]">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 pb-3 sm:pb-4 border-b border-[rgb(var(--border))]">
               Key Ideas
             </h2>
             <EditableSummarySection
@@ -121,7 +121,7 @@ export function ContinuousScrollView({ book, canEdit = false }: ContinuousScroll
       {summary.chapters && summary.chapters.length > 0 && (
         <section id="chapters" className="scroll-mt-8">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 pb-4 border-b border-[rgb(var(--border))]">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 pb-3 sm:pb-4 border-b border-[rgb(var(--border))]">
               Chapters
             </h2>
             <EditableSummarySection
@@ -156,7 +156,7 @@ export function ContinuousScrollView({ book, canEdit = false }: ContinuousScroll
       {summary.actionable_insights && summary.actionable_insights.length > 0 && (
         <section id="actionable-insights" className="scroll-mt-8">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 pb-4 border-b border-[rgb(var(--border))]">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 pb-3 sm:pb-4 border-b border-[rgb(var(--border))]">
               Actionable Insights
             </h2>
             <EditableListSection
@@ -181,7 +181,7 @@ export function ContinuousScrollView({ book, canEdit = false }: ContinuousScroll
       {summary.quotes && summary.quotes.length > 0 && (
         <section id="quotes" className="scroll-mt-8">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 pb-4 border-b border-[rgb(var(--border))]">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 pb-3 sm:pb-4 border-b border-[rgb(var(--border))]">
               Quotes
             </h2>
             <EditableListSection

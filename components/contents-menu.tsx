@@ -83,7 +83,7 @@ export function ContentsMenu({
   return (
     <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose}>
       <div 
-        className="fixed left-0 top-0 h-full w-80 bg-[rgb(var(--background))] border-r border-[rgb(var(--border))] overflow-y-auto"
+        className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-[rgb(var(--background))] border-r border-[rgb(var(--border))] overflow-y-auto shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">

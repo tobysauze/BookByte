@@ -3,11 +3,13 @@
 import { useMemo, useRef, useState } from "react";
 import { useHighlights } from "@/lib/use-highlights";
 import { HighlightableText } from "@/components/highlightable-text";
+import { Button } from "@/components/ui/button";
+import { Menu } from "lucide-react";
 
 export function RawTextSummaryView({ bookId, content }: { bookId: string; content: string }) {
     const { highlights, refreshHighlights } = useHighlights(bookId);
     const textContainerRef = useRef<HTMLDivElement | null>(null);
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true); // Start collapsed on mobile
 
     const displayContent = useMemo(() => {
         // Hide the card blurb tags from the main reading view.
@@ -152,31 +154,46 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
     };
 
     return (
-        <div className="flex gap-4">
-            {/* Deep-dive table of contents */}
-            <aside
-                className={`sticky top-24 h-[calc(100vh-6rem)] flex-shrink-0 overflow-y-auto rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 transition-all duration-300 ${isCollapsed ? "w-14" : "w-80"
-                    }`}
-            >
-                <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold">{isCollapsed ? "TOC" : "Contents"}</div>
-                    <button
-                        type="button"
-                        onClick={() => setIsCollapsed((v) => !v)}
-                        className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-1 text-xs text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]"
-                    >
-                        {isCollapsed ? ">" : "<"}
-                    </button>
-                </div>
+        <div className="flex flex-col lg:flex-row gap-4">
+            {/* Mobile Contents Button */}
+            <div className="lg:hidden flex justify-center mb-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="w-full sm:w-auto"
+                >
+                    <Menu className="h-4 w-4 mr-2" />
+                    {isCollapsed ? "Show Contents" : "Hide Contents"}
+                </Button>
+            </div>
 
-                {!isCollapsed ? (
-                    <div className="mt-4 space-y-1">
+            {/* Deep-dive table of contents - Collapsible on mobile */}
+            {!isCollapsed && (
+                <aside
+                    className={`lg:block sticky top-20 lg:top-24 h-auto lg:h-[calc(100vh-6rem)] flex-shrink-0 overflow-y-auto rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 transition-all duration-300 w-full lg:w-80 mb-4 lg:mb-0`}
+                >
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                        <div className="text-sm font-semibold">Contents</div>
+                        <button
+                            type="button"
+                            onClick={() => setIsCollapsed(true)}
+                            className="lg:hidden rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-1 text-xs text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]"
+                        >
+                            ×
+                        </button>
+                    </div>
+
+                    <div className="space-y-1">
                         {toc.length ? (
                             toc.map((item) => (
                                 <button
                                     key={item.id}
                                     type="button"
-                                    onClick={() => scrollToOffset(item.offset)}
+                                    onClick={() => {
+                                        scrollToOffset(item.offset);
+                                        setIsCollapsed(true); // Close on mobile after clicking
+                                    }}
                                     className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[rgb(var(--muted))] ${item.level === 1
                                             ? "font-semibold"
                                             : item.level === 2
@@ -194,12 +211,11 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                             </div>
                         )}
                     </div>
-                ) : null}
-            </aside>
+                </aside>
 
             {/* Main content */}
-            <div className="flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-8">
-                <div className="prose dark:prose-invert max-w-none font-mono text-sm leading-relaxed">
+            <div className="flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 sm:p-6 lg:p-8">
+                <div className="prose dark:prose-invert max-w-none font-mono text-sm sm:text-base leading-relaxed sm:leading-loose">
                     <HighlightableText
                         text={displayContent}
                         bookId={bookId}
@@ -208,7 +224,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                         highlights={highlights}
                         onHighlightCreated={refreshHighlights}
                         onHighlightDeleted={refreshHighlights}
-                        className="whitespace-pre-wrap"
+                        className="whitespace-pre-wrap break-words"
                         containerRef={textContainerRef}
                     />
                 </div>

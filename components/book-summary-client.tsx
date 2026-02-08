@@ -9,7 +9,7 @@ import { EditableSummaryContent } from "@/components/editable-summary-content";
 import { ContinuousScrollView } from "@/components/continuous-scroll-view";
 import { ContentsMenu } from "@/components/contents-menu";
 import { TextSettings } from "@/components/text-settings";
-import { Scroll, BookOpen } from "lucide-react";
+import { Scroll, BookOpen, Menu } from "lucide-react";
 import { z } from "zod";
 import type { SupabaseSummary } from "@/lib/supabase";
 import type { SummaryPayload } from "@/lib/schemas";
@@ -360,38 +360,52 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
 
   return (
     <div className="space-y-6">
+      {/* Mobile Contents Button - Only show on mobile */}
+      <div className="lg:hidden flex justify-center">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsContentsOpen(true)}
+          className="w-full sm:w-auto"
+        >
+          <Menu className="h-4 w-4 mr-2" />
+          Contents
+        </Button>
+      </div>
+
       {/* Action Buttons */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
           <TextSettings />
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))]">
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))]">
             <button
               onClick={() => handleViewModeToggle(false)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${!isContinuousScroll
+              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs sm:text-sm transition-colors ${!isContinuousScroll
                 ? 'bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]'
                 : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
                 }`}
             >
-              <BookOpen className="h-4 w-4" />
-              <span>Paginated</span>
+              <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Paginated</span>
             </button>
             <button
               onClick={() => handleViewModeToggle(true)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${isContinuousScroll
+              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs sm:text-sm transition-colors ${isContinuousScroll
                 ? 'bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]'
                 : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
                 }`}
             >
-              <Scroll className="h-4 w-4" />
-              <span>Continuous Scroll</span>
+              <Scroll className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Continuous Scroll</span>
             </button>
           </div>
         </div>
         {book.file_url ? (
-          <Button asChild variant="secondary" size="sm">
+          <Button asChild variant="secondary" size="sm" className="text-xs sm:text-sm">
             <a href={book.file_url} target="_blank" rel="noopener noreferrer">
-              Download source file
+              <span className="hidden sm:inline">Download source file</span>
+              <span className="sm:hidden">Download</span>
             </a>
           </Button>
         ) : null}
@@ -406,19 +420,21 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
 
       {/* Summary Section with Sidebar */}
       <>
-        <div className="flex">
-          {/* Vertical Navigation Sidebar */}
-          <VerticalSummaryNav
-            summary={book.summary}
-            activeTab={activeTab}
-            onTabChange={handleSectionChange}
-            onGenerateAudio={handleGenerateAudio}
-            isGenerating={isGenerating}
-            onContentsClick={() => setIsContentsOpen(true)}
-          />
+        <div className="flex flex-col lg:flex-row">
+          {/* Vertical Navigation Sidebar - Hidden on mobile */}
+          <div className="hidden lg:block">
+            <VerticalSummaryNav
+              summary={book.summary}
+              activeTab={activeTab}
+              onTabChange={handleSectionChange}
+              onGenerateAudio={handleGenerateAudio}
+              isGenerating={isGenerating}
+              onContentsClick={() => setIsContentsOpen(true)}
+            />
+          </div>
 
           {/* Main Summary Content */}
-          <div className="flex-1 pl-2">
+          <div className="flex-1 lg:pl-2 w-full">
             {isContinuousScroll ? (
               <ContinuousScrollView
                 book={book}

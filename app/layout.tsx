@@ -28,6 +28,12 @@ export const metadata: Metadata = {
   },
   description:
     "BookByte turns your books and PDFs into structured summaries, actionable insights, and audio recaps powered by AI.",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+  },
   openGraph: {
     title: "BookByte — AI-Powered Book Summaries",
     description:
@@ -60,7 +66,7 @@ export default async function RootLayout({
         <ClientThemeProvider>
           <TextPreferencesProvider>
             <Navbar initialUser={user} />
-            <main className="px-4 pb-16 pt-24 sm:px-6 lg:px-10">
+            <main className="px-3 pb-16 pt-20 sm:px-4 sm:pt-24 lg:px-10">
               <div className="mx-auto w-full max-w-6xl">{children}</div>
             </main>
             <Toaster />

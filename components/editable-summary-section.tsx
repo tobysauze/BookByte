@@ -226,8 +226,8 @@ export function EditableSummarySection({
                 const actualIndex = page * ITEMS_PER_PAGE + displayIndex;
                 
                 return (
-                  <div key={item.id} className="mb-10 pb-10 border-b border-[rgb(var(--border))] last:border-b-0 last:mb-0 last:pb-0">
-                    <h3 className="text-2xl font-semibold text-[rgb(var(--foreground))] mb-4">
+                  <div key={item.id} className="mb-6 sm:mb-10 pb-6 sm:pb-10 border-b border-[rgb(var(--border))] last:border-b-0 last:mb-0 last:pb-0">
+                    <h3 className="text-xl sm:text-2xl font-semibold text-[rgb(var(--foreground))] mb-3 sm:mb-4">
                       {item.title}
                     </h3>
                     {bookId && section ? (
@@ -239,10 +239,10 @@ export function EditableSummarySection({
                         highlights={highlights}
                         onHighlightCreated={onHighlightCreated}
                         onHighlightDeleted={onHighlightDeleted}
-                        className="text-[rgb(var(--foreground))] leading-7 whitespace-pre-wrap text-base"
+                        className="text-[rgb(var(--foreground))] leading-7 sm:leading-8 whitespace-pre-wrap text-base sm:text-lg break-words"
                       />
                     ) : (
-                      <SummaryText className="text-[rgb(var(--foreground))] leading-7 whitespace-pre-wrap text-base">
+                      <SummaryText className="text-[rgb(var(--foreground))] leading-7 sm:leading-8 whitespace-pre-wrap text-base sm:text-lg break-words">
                         {item.text}
                       </SummaryText>
                     )}
@@ -312,8 +312,8 @@ export function EditableTextSection({
 
   return (
     <Card className={className}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle className="text-xl font-semibold">{title}</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 sm:pb-4">
+        <CardTitle className="text-lg sm:text-xl font-semibold">{title}</CardTitle>
         {canEdit && !isEditing && (
           <Button
             variant="outline"
@@ -366,10 +366,10 @@ export function EditableTextSection({
               highlights={highlights}
               onHighlightCreated={onHighlightCreated}
               onHighlightDeleted={onHighlightDeleted}
-              className="text-[rgb(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap"
+              className="text-[rgb(var(--muted-foreground))] leading-relaxed sm:leading-loose whitespace-pre-wrap text-base sm:text-lg break-words"
             />
           ) : (
-            <SummaryText className="text-[rgb(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">
+            <SummaryText className="text-[rgb(var(--muted-foreground))] leading-relaxed sm:leading-loose whitespace-pre-wrap text-base sm:text-lg break-words">
               {content}
             </SummaryText>
           )
@@ -587,10 +587,10 @@ export function EditableListSection({
                         highlights={highlights}
                         onHighlightCreated={onHighlightCreated}
                         onHighlightDeleted={onHighlightDeleted}
-                        className="text-[rgb(var(--foreground))] leading-7 whitespace-pre-wrap text-base"
+                        className="text-[rgb(var(--foreground))] leading-7 sm:leading-8 whitespace-pre-wrap text-base sm:text-lg break-words"
                       />
                     ) : (
-                      <SummaryText className="text-[rgb(var(--foreground))] leading-7 whitespace-pre-wrap text-base">
+                      <SummaryText className="text-[rgb(var(--foreground))] leading-7 sm:leading-8 whitespace-pre-wrap text-base sm:text-lg break-words">
                         {item.split('\n\n').map((paragraph, pIndex) => (
                           <p key={pIndex} className="mb-4">
                             {paragraph}
