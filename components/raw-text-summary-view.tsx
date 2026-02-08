@@ -14,6 +14,23 @@ import { List, Scroll, BookOpen, ChevronLeft, ChevronRight } from "lucide-react"
 
 type TocItem = { id: string; label: string; level: 1 | 2 | 3; offset: number };
 
+/** Returns true if a line is just a visual separator (═══, ===, ---) */
+function isSeparatorLine(line: string): boolean {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    return /^[═=\-─]{6,}$/.test(trimmed);
+}
+
+/** Strips separator lines and excessive whitespace, returns meaningful text length */
+function meaningfulTextLength(text: string): number {
+    const lines = text.split("\n");
+    const meaningful = lines
+        .filter((l) => !isSeparatorLine(l))
+        .map((l) => l.trim())
+        .filter(Boolean);
+    return meaningful.join("").length;
+}
+
 export function RawTextSummaryView({ bookId, content }: { bookId: string; content: string }) {
     const { highlights, refreshHighlights } = useHighlights(bookId);
     const textContainerRef = useRef<HTMLDivElement | null>(null);
@@ -51,18 +68,14 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
             return count === 1 ? base : `${base}-${count}`;
         };
 
-        const isSeparator = (line: string) => {
-            const trimmed = line.trim();
-            return trimmed.length > 0 && /^[═=]{8,}$/.test(trimmed);
-        };
-
         const isMajorHeading = (line: string) => {
             const trimmed = line.trim();
             const cleaned = trimmed.replace(/^\*+|\*+$/g, "").trim();
 
             if (!cleaned) return null;
-            if (isSeparator(cleaned)) return null;
+            if (isSeparatorLine(cleaned)) return null;
 
+            // PART X: Title
             const partMatch = cleaned.match(/^PART\s+(\d+)\s*:\s*(.+)$/i);
             if (partMatch) {
                 const num = partMatch[1]!;
@@ -70,6 +83,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: `Part ${num}: ${title}`, level: 1 as const };
             }
 
+            // Chapter X: Title
             const chapterMatch = cleaned.match(/^(Chapter|CHAPTER)\s+(\d+)\s*:\s*(.+)$/);
             if (chapterMatch) {
                 const num = chapterMatch[2]!;
@@ -77,11 +91,32 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: `Chapter ${num}: ${title}`, level: 2 as const };
             }
 
+            // Introduction/Conclusion/etc
             const introLike = cleaned.match(/^(Introduction|Conclusion|Appendix|Epilogue|Prologue)\s*:\s*(.+)$/i);
             if (introLike) {
                 return { label: `${introLike[1]!.trim()}: ${introLike[2]!.trim()}`, level: 2 as const };
             }
 
+            // Subject One: Title, Subject 1: Title, **Subject One: Title**
+            const subjectMatch = cleaned.match(/^(?:\*\*)?Subject\s+(\w+)\s*:\s*(.+?)(?:\*\*)?$/i);
+            if (subjectMatch) {
+                const num = subjectMatch[1]!;
+                const title = subjectMatch[2]!.trim().replace(/\*+$/, "").trim();
+                return { label: `Subject ${num}: ${title}`, level: 2 as const };
+            }
+
+            // Lesson X: Title, Theme X: Title, Topic X: Title, Unit X: Title, Module X: Title
+            const numberedSectionMatch = cleaned.match(
+                /^(?:\*\*)?(Lesson|Theme|Topic|Unit|Module|Section|Cheat\s*Sheet)\s+(\w+)\s*:\s*(.+?)(?:\*\*)?$/i
+            );
+            if (numberedSectionMatch) {
+                const kind = numberedSectionMatch[1]!.trim();
+                const num = numberedSectionMatch[2]!;
+                const title = numberedSectionMatch[3]!.trim().replace(/\*+$/, "").trim();
+                return { label: `${kind} ${num}: ${title}`, level: 2 as const };
+            }
+
+            // Known sub-headings
             const normalized = cleaned.replace(/\*\*/g, "").replace(/:$/, "").trim();
             const known = new Set([
                 "Core Frameworks",
@@ -104,9 +139,23 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 "One-Page Cheat Sheet",
                 "Reading Guide",
                 "Discussion Questions",
+                "Extended Commentary & Context",
             ]);
             if (known.has(normalized)) {
                 return { label: normalized, level: 3 as const };
+            }
+
+            // Bold lines that look like standalone section titles:
+            // Must be wrapped in ** ... **, relatively short, and contain a colon or be all-caps
+            if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
+                const inner = trimmed.slice(2, -2).trim();
+                // Only if it's short enough to be a heading (< 100 chars) and has a colon
+                if (inner.length < 100 && inner.includes(":")) {
+                    // Avoid matching things like "**Summary (500 words):**" — too generic
+                    if (!/^summary\s*\(/i.test(inner) && !/^\d/.test(inner)) {
+                        return { label: inner.replace(/:$/, "").trim(), level: 3 as const };
+                    }
+                }
             }
 
             return null;
@@ -130,27 +179,22 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         return items;
     }, [displayContent]);
 
-    // Split content into pages based on top-level TOC headings (level 1 & 2)
+    // Split content into pages based on ALL TOC headings, then merge thin pages
     const pages = useMemo(() => {
         if (toc.length === 0) {
-            // No headings found — treat the whole thing as one page
             return [{ label: "Summary", content: displayContent, tocIndex: -1 }];
         }
 
-        // Use only level-1 and level-2 headings as page boundaries
-        const pageBreaks = toc.filter((item) => item.level <= 2);
+        // Use ALL headings as potential page breaks
+        const pageBreaks = [...toc];
 
-        if (pageBreaks.length === 0) {
-            return [{ label: "Summary", content: displayContent, tocIndex: -1 }];
-        }
+        const raw: Array<{ label: string; content: string; tocIndex: number }> = [];
 
-        const result: Array<{ label: string; content: string; tocIndex: number }> = [];
-
-        // If there's content before the first heading, add it as "Introduction"
+        // If there's content before the first heading, add it
         if (pageBreaks[0].offset > 0) {
             const intro = displayContent.slice(0, pageBreaks[0].offset).trim();
             if (intro.length > 0) {
-                result.push({ label: "Introduction", content: intro, tocIndex: -1 });
+                raw.push({ label: "Introduction", content: intro, tocIndex: -1 });
             }
         }
 
@@ -159,7 +203,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
             const end = i + 1 < pageBreaks.length ? pageBreaks[i + 1].offset : displayContent.length;
             const section = displayContent.slice(start, end).trim();
             if (section.length > 0) {
-                result.push({
+                raw.push({
                     label: pageBreaks[i].label,
                     content: section,
                     tocIndex: toc.indexOf(pageBreaks[i]),
@@ -167,7 +211,28 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
             }
         }
 
-        return result;
+        // Merge thin pages (< 300 meaningful chars) with the NEXT page
+        const MIN_PAGE_CHARS = 300;
+        const merged: typeof raw = [];
+
+        for (let i = 0; i < raw.length; i++) {
+            const page = raw[i];
+            const mLen = meaningfulTextLength(page.content);
+
+            if (mLen < MIN_PAGE_CHARS && i + 1 < raw.length) {
+                // Merge this page's content into the next page
+                const next = raw[i + 1];
+                raw[i + 1] = {
+                    label: page.label, // keep the earlier label as the page title
+                    content: page.content + "\n\n" + next.content,
+                    tocIndex: page.tocIndex,
+                };
+            } else {
+                merged.push(page);
+            }
+        }
+
+        return merged.length > 0 ? merged : [{ label: "Summary", content: displayContent, tocIndex: -1 }];
     }, [displayContent, toc]);
 
     // Ensure currentPage is valid
@@ -214,10 +279,11 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
 
     const handleTocItemClick = (charOffset: number) => {
         if (viewMode === "paginated") {
-            // Find which page contains this offset
-            const tocItem = toc.find((t) => t.offset === charOffset);
-            if (tocItem) {
-                const pageIndex = pages.findIndex((p) => p.tocIndex === toc.indexOf(tocItem));
+            // Find the page that contains this offset
+            // First try exact match via tocIndex
+            const tocIdx = toc.findIndex((t) => t.offset === charOffset);
+            if (tocIdx >= 0) {
+                const pageIndex = pages.findIndex((p) => p.tocIndex === tocIdx);
                 if (pageIndex >= 0) {
                     setCurrentPage(pageIndex);
                     setIsTocOpen(false);
@@ -226,9 +292,10 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 }
             }
             // Fallback: find the page whose content range includes this offset
+            // Pages are in order, so find the last page whose start offset <= charOffset
             for (let i = pages.length - 1; i >= 0; i--) {
-                const pageTocItem = toc[pages[i].tocIndex];
-                if (pageTocItem && pageTocItem.offset <= charOffset) {
+                const ti = pages[i].tocIndex;
+                if (ti >= 0 && toc[ti] && toc[ti].offset <= charOffset) {
                     setCurrentPage(i);
                     setIsTocOpen(false);
                     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -444,7 +511,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                             </div>
 
                             {/* Page dots for visual progress */}
-                            {pages.length <= 20 && (
+                            {pages.length <= 30 && (
                                 <div className="flex items-center justify-center gap-1.5 mt-4 flex-wrap">
                                     {pages.map((page, i) => (
                                         <button

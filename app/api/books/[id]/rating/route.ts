@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 
@@ -31,8 +32,11 @@ export async function POST(
       );
     }
 
+    // Use admin client to bypass RLS policies (we've already verified auth above)
+    const admin = getSupabaseAdminClient();
+
     // Upsert the rating (insert or update if exists)
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("summary_ratings")
       .upsert(
         {
@@ -89,8 +93,11 @@ export async function GET(
       );
     }
 
+    // Use admin client to bypass RLS policies
+    const admin = getSupabaseAdminClient();
+
     // Get the current user's rating for this book
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("summary_ratings")
       .select("id, rating, notes, created_at, updated_at")
       .eq("user_id", user.id)
@@ -119,7 +126,3 @@ export async function GET(
     );
   }
 }
-
-
-
-
