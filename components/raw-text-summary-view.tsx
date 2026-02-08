@@ -212,6 +212,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                         )}
                     </div>
                 </aside>
+            )}
 
             {/* Main content */}
             <div className="flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 sm:p-6 lg:p-8">
