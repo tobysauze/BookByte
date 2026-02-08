@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { VerticalSummaryNav } from "@/components/vertical-summary-nav";
 import { EditableSummaryContent } from "@/components/editable-summary-content";
 import { ContinuousScrollView } from "@/components/continuous-scroll-view";
 import { ContentsMenu } from "@/components/contents-menu";
@@ -360,11 +359,11 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
 
   return (
     <div className="space-y-6">
-      {/* Fixed side handle to open contents - visible on mobile only */}
+      {/* Fixed side handle to open contents — works on all screen sizes */}
       <button
         type="button"
         onClick={() => setIsContentsOpen(true)}
-        className="lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] pl-1.5 pr-2 py-3 rounded-r-lg shadow-lg hover:pl-2.5 transition-all"
+        className="fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] pl-1.5 pr-2 py-3 rounded-r-lg shadow-lg hover:pl-2.5 transition-all"
         title="Open Contents"
       >
         <List className="h-4 w-4" />
@@ -415,74 +414,57 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
         </div>
       ) : null}
 
-      {/* Summary Section with Sidebar */}
-      <>
-        <div className="flex flex-col lg:flex-row">
-          {/* Vertical Navigation Sidebar - Hidden on mobile */}
-          <div className="hidden lg:block">
-            <VerticalSummaryNav
-              summary={book.summary}
-              activeTab={activeTab}
-              onTabChange={handleSectionChange}
-              onGenerateAudio={handleGenerateAudio}
-              isGenerating={isGenerating}
-              onContentsClick={() => setIsContentsOpen(true)}
-            />
-          </div>
+      {/* Main Summary Content — centered, no sidebar */}
+      <div className="max-w-4xl mx-auto w-full">
+        {isContinuousScroll ? (
+          <ContinuousScrollView
+            book={book}
+            canEdit={canEdit}
+          />
+        ) : (
+          <EditableSummaryContent
+            book={book}
+            activeTab={activeTab as string}
+            currentItemIndex={currentItemIndex}
+            onSectionChange={handleSectionChange as (section: string) => void}
+            onItemChange={handleItemChange}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            canEdit={canEdit}
+          />
+        )}
+      </div>
 
-          {/* Main Summary Content */}
-          <div className="flex-1 lg:pl-2 w-full">
-            {isContinuousScroll ? (
-              <ContinuousScrollView
-                book={book}
-                canEdit={canEdit}
-              />
-            ) : (
-              <EditableSummaryContent
-                book={book}
-                activeTab={activeTab as string}
-                currentItemIndex={currentItemIndex}
-                onSectionChange={handleSectionChange as (section: string) => void}
-                onItemChange={handleItemChange}
-                onPrevious={handlePrevious}
-                onNext={handleNext}
-                canEdit={canEdit}
-              />
-            )}
+      {/* Floating audio player (appears after generation) */}
+      {isAudioVisible && (currentAudio?.src || fallbackAudioText) ? (
+        <div className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-xs text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]"
+              onClick={() => setIsAudioVisible(false)}
+            >
+              Hide
+            </button>
           </div>
+          {currentAudio?.src ? (
+            <AudioPlayer src={currentAudio.src} title={currentAudio.title} autoPlay />
+          ) : fallbackAudioText ? (
+            <SpeechSynthesisPlayer text={fallbackAudioText} autoPlay />
+          ) : null}
         </div>
+      ) : null}
 
-        {/* Floating audio player (appears after generation) */}
-        {isAudioVisible && (currentAudio?.src || fallbackAudioText) ? (
-          <div className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
-            <div className="mb-2 flex justify-end">
-              <button
-                type="button"
-                className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-xs text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]"
-                onClick={() => setIsAudioVisible(false)}
-              >
-                Hide
-              </button>
-            </div>
-            {currentAudio?.src ? (
-              <AudioPlayer src={currentAudio.src} title={currentAudio.title} autoPlay />
-            ) : fallbackAudioText ? (
-              <SpeechSynthesisPlayer text={fallbackAudioText} autoPlay />
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Contents Menu - Only show if not raw text */}
-        <ContentsMenu
-          summary={book.summary}
-          currentSection={activeTab}
-          currentItemIndex={currentItemIndex}
-          onSectionChange={handleSectionChange}
-          onItemChange={handleItemChange}
-          onClose={() => setIsContentsOpen(false)}
-          isOpen={isContentsOpen}
-        />
-      </>
+      {/* Contents Menu — Sheet drawer from left */}
+      <ContentsMenu
+        summary={book.summary}
+        currentSection={activeTab}
+        currentItemIndex={currentItemIndex}
+        onSectionChange={handleSectionChange}
+        onItemChange={handleItemChange}
+        onClose={() => setIsContentsOpen(false)}
+        isOpen={isContentsOpen}
+      />
     </div>
   );
 }

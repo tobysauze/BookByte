@@ -75,7 +75,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
             if (!cleaned) return null;
             if (isSeparatorLine(cleaned)) return null;
 
-            // PART X: Title
             const partMatch = cleaned.match(/^PART\s+(\d+)\s*:\s*(.+)$/i);
             if (partMatch) {
                 const num = partMatch[1]!;
@@ -83,7 +82,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: `Part ${num}: ${title}`, level: 1 as const };
             }
 
-            // Chapter X: Title
             const chapterMatch = cleaned.match(/^(Chapter|CHAPTER)\s+(\d+)\s*:\s*(.+)$/);
             if (chapterMatch) {
                 const num = chapterMatch[2]!;
@@ -91,13 +89,11 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: `Chapter ${num}: ${title}`, level: 2 as const };
             }
 
-            // Introduction/Conclusion/etc
             const introLike = cleaned.match(/^(Introduction|Conclusion|Appendix|Epilogue|Prologue)\s*:\s*(.+)$/i);
             if (introLike) {
                 return { label: `${introLike[1]!.trim()}: ${introLike[2]!.trim()}`, level: 2 as const };
             }
 
-            // Subject One: Title, Subject 1: Title, **Subject One: Title**
             const subjectMatch = cleaned.match(/^(?:\*\*)?Subject\s+(\w+)\s*:\s*(.+?)(?:\*\*)?$/i);
             if (subjectMatch) {
                 const num = subjectMatch[1]!;
@@ -105,7 +101,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: `Subject ${num}: ${title}`, level: 2 as const };
             }
 
-            // Cheat Sheet X, Lesson X, etc. — sub-sections within a Subject/Chapter (level 3, TOC only, NOT page breaks)
             const numberedSubsectionMatch = cleaned.match(
                 /^(?:\*\*)?(Lesson|Theme|Topic|Unit|Module|Section|Cheat\s*Sheet)\s+(\w+)\s*:\s*(.+?)(?:\*\*)?$/i
             );
@@ -116,7 +111,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: `${kind} ${num}: ${title}`, level: 3 as const };
             }
 
-            // Known sub-headings
             const normalized = cleaned.replace(/\*\*/g, "").replace(/:$/, "").trim();
             const known = new Set([
                 "Core Frameworks",
@@ -145,13 +139,9 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: normalized, level: 3 as const };
             }
 
-            // Bold lines that look like standalone section titles:
-            // Must be wrapped in ** ... **, relatively short, and contain a colon or be all-caps
             if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
                 const inner = trimmed.slice(2, -2).trim();
-                // Only if it's short enough to be a heading (< 100 chars) and has a colon
                 if (inner.length < 100 && inner.includes(":")) {
-                    // Avoid matching things like "**Summary (500 words):**" — too generic
                     if (!/^summary\s*\(/i.test(inner) && !/^\d/.test(inner)) {
                         return { label: inner.replace(/:$/, "").trim(), level: 3 as const };
                     }
@@ -179,14 +169,12 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         return items;
     }, [displayContent]);
 
-    // Split content into pages based on level 1 & 2 headings (Parts, Subjects, Chapters), then merge thin pages
+    // Split content into pages based on level 1 & 2 headings
     const pages = useMemo(() => {
         if (toc.length === 0) {
             return [{ label: "Summary", content: displayContent, tocIndex: -1 }];
         }
 
-        // Only level 1 (Parts) and level 2 (Subjects, Chapters, Intro/Conclusion) create page breaks
-        // Level 3 items (Cheat Sheets, Key Techniques, etc.) stay within their parent page
         const pageBreaks = toc.filter((item) => item.level <= 2);
 
         if (pageBreaks.length === 0) {
@@ -195,7 +183,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
 
         const raw: Array<{ label: string; content: string; tocIndex: number }> = [];
 
-        // If there's content before the first heading, add it
         if (pageBreaks[0].offset > 0) {
             const intro = displayContent.slice(0, pageBreaks[0].offset).trim();
             if (intro.length > 0) {
@@ -216,7 +203,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
             }
         }
 
-        // Merge thin pages (< 300 meaningful chars) with the NEXT page
         const MIN_PAGE_CHARS = 300;
         const merged: typeof raw = [];
 
@@ -225,10 +211,9 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
             const mLen = meaningfulTextLength(page.content);
 
             if (mLen < MIN_PAGE_CHARS && i + 1 < raw.length) {
-                // Merge this page's content into the next page
                 const next = raw[i + 1];
                 raw[i + 1] = {
-                    label: page.label, // keep the earlier label as the page title
+                    label: page.label,
                     content: page.content + "\n\n" + next.content,
                     tocIndex: page.tocIndex,
                 };
@@ -240,7 +225,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         return merged.length > 0 ? merged : [{ label: "Summary", content: displayContent, tocIndex: -1 }];
     }, [displayContent, toc]);
 
-    // Ensure currentPage is valid
     useEffect(() => {
         if (currentPage >= pages.length) {
             setCurrentPage(Math.max(0, pages.length - 1));
@@ -284,8 +268,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
 
     const handleTocItemClick = (charOffset: number) => {
         if (viewMode === "paginated") {
-            // Find the page that contains this offset
-            // First try exact match via tocIndex
             const tocIdx = toc.findIndex((t) => t.offset === charOffset);
             if (tocIdx >= 0) {
                 const pageIndex = pages.findIndex((p) => p.tocIndex === tocIdx);
@@ -296,8 +278,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                     return;
                 }
             }
-            // Fallback: find the page whose content range includes this offset
-            // Pages are in order, so find the last page whose start offset <= charOffset
             for (let i = pages.length - 1; i >= 0; i--) {
                 const ti = pages[i].tocIndex;
                 if (ti >= 0 && toc[ti] && toc[ti].offset <= charOffset) {
@@ -342,7 +322,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
 
     const currentPageContent = viewMode === "paginated" ? (pages[currentPage]?.content ?? "") : displayContent;
 
-    // Build TOC items list (shared between mobile sheet and desktop sidebar)
     const tocList = (onClick: (offset: number) => void) => (
         <>
             {toc.length ? (
@@ -402,7 +381,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                     </button>
                 </div>
 
-                {/* Page indicator (only in paginated mode) */}
                 {viewMode === "paginated" && pages.length > 1 && (
                     <span className="text-xs sm:text-sm text-[rgb(var(--muted-foreground))]">
                         Page {currentPage + 1} of {pages.length}
@@ -410,48 +388,31 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 )}
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-4">
-                {/* Fixed side handle to open contents - visible on mobile only */}
-                <button
-                    type="button"
-                    onClick={() => setIsTocOpen(true)}
-                    className="lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] pl-1.5 pr-2 py-3 rounded-r-lg shadow-lg hover:pl-2.5 transition-all"
-                    title="Open Contents"
-                >
-                    <List className="h-4 w-4" />
-                </button>
+            {/* Fixed side handle to open contents — works on all screen sizes */}
+            <button
+                type="button"
+                onClick={() => setIsTocOpen(true)}
+                className="fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] pl-1.5 pr-2 py-3 rounded-r-lg shadow-lg hover:pl-2.5 transition-all"
+                title="Open Contents"
+            >
+                <List className="h-4 w-4" />
+            </button>
 
-                {/* Mobile TOC - Sheet drawer */}
-                <Sheet open={isTocOpen} onOpenChange={setIsTocOpen}>
-                    <SheetContent side="left" className="w-80 max-w-[85vw] overflow-y-auto p-0">
-                        <SheetHeader className="p-6 pb-4">
-                            <SheetTitle>Contents</SheetTitle>
-                        </SheetHeader>
-                        <div className="px-4 pb-6 space-y-1">
-                            {tocList(handleTocItemClick)}
-                        </div>
-                    </SheetContent>
-                </Sheet>
-
-                {/* Desktop sidebar TOC - always visible on large screens */}
-                <aside
-                    className="hidden lg:block sticky top-24 h-[calc(100vh-6rem)] flex-shrink-0 overflow-y-auto rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 w-80"
-                >
-                    <div className="text-sm font-semibold mb-4">Contents</div>
-                    <div className="space-y-1">
-                        {tocList((offset) => {
-                            if (viewMode === "paginated") {
-                                handleTocItemClick(offset);
-                            } else {
-                                scrollToOffset(offset);
-                            }
-                        })}
+            {/* Contents panel — Sheet drawer from left on all screen sizes */}
+            <Sheet open={isTocOpen} onOpenChange={setIsTocOpen}>
+                <SheetContent side="left" className="w-80 max-w-[85vw] overflow-y-auto p-0">
+                    <SheetHeader className="p-6 pb-4">
+                        <SheetTitle>Contents</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-4 pb-6 space-y-1">
+                        {tocList(handleTocItemClick)}
                     </div>
-                </aside>
+                </SheetContent>
+            </Sheet>
 
-                {/* Main content */}
-                <div className="flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 sm:p-6 lg:p-8">
-                    {/* Page title in paginated mode */}
+            {/* Main content — always centered, no sidebar pushing it */}
+            <div className="max-w-4xl mx-auto">
+                <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 sm:p-6 lg:p-8">
                     {viewMode === "paginated" && pages[currentPage] && (
                         <div className="mb-4 pb-3 border-b border-[rgb(var(--border))]">
                             <h2 className="text-lg sm:text-xl font-bold text-[rgb(var(--foreground))]">
@@ -477,7 +438,6 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                         />
                     </div>
 
-                    {/* Pagination controls */}
                     {viewMode === "paginated" && pages.length > 1 && (
                         <div className="mt-8 pt-6 border-t border-[rgb(var(--border))]">
                             <div className="flex items-center justify-between gap-4">
@@ -509,13 +469,11 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                                     disabled={currentPage === pages.length - 1}
                                     className="flex items-center gap-2"
                                 >
-                                    <span className="hidden sm:inline">Next</span>
-                                    <span className="sm:hidden">Next</span>
+                                    <span>Next</span>
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </div>
 
-                            {/* Page dots for visual progress */}
                             {pages.length <= 30 && (
                                 <div className="flex items-center justify-center gap-1.5 mt-4 flex-wrap">
                                     {pages.map((page, i) => (
