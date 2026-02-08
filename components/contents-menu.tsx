@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
-import { createPortal } from "react-dom";
-import { BookOpen, Lightbulb, List, Target, Quote, X } from "lucide-react";
+import { BookOpen, Lightbulb, List, Target, Quote } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { z } from "zod";
 import type { SummaryPayload } from "@/lib/schemas";
 import { summarySchema } from "@/lib/schemas";
@@ -57,51 +61,9 @@ export function ContentsMenu({
   onClose,
   isOpen,
 }: ContentsMenuProps) {
-  // Prevent body scroll when menu is open
-  useEffect(() => {
-    if (isOpen) {
-      // Save current scroll position
-      const scrollY = window.scrollY;
-      const html = document.documentElement;
-      const body = document.body;
-      
-      // Prevent scrolling on both html and body (for better mobile support)
-      html.style.position = 'fixed';
-      html.style.top = `-${scrollY}px`;
-      html.style.width = '100%';
-      html.style.overflow = 'hidden';
-      html.style.touchAction = 'none'; // Prevent touch scrolling on mobile
-      
-      body.style.position = 'fixed';
-      body.style.top = `-${scrollY}px`;
-      body.style.width = '100%';
-      body.style.overflow = 'hidden';
-      body.style.touchAction = 'none';
-      
-      return () => {
-        // Restore scroll position when menu closes
-        html.style.position = '';
-        html.style.top = '';
-        html.style.width = '';
-        html.style.overflow = '';
-        html.style.touchAction = '';
-        
-        body.style.position = '';
-        body.style.top = '';
-        body.style.width = '';
-        body.style.overflow = '';
-        body.style.touchAction = '';
-        
-        window.scrollTo(0, scrollY);
-      };
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-  
   // Ensure summary is structured
   if (!isStructuredSummary(summary)) {
-    return null; // Don't show contents for raw text summaries
+    return null;
   }
   
   const structuredSummary = summary;
@@ -122,223 +84,185 @@ export function ContentsMenu({
     onClose();
   };
 
-  // Use portal to render at document root level, ensuring it's always on top
-  const menuContent = (
-    <div 
-      className="fixed inset-0 z-[9999] bg-black/50" 
-      onClick={onClose}
-      style={{ touchAction: 'none' }}
-    >
-      <div 
-        className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-[rgb(var(--background))] border-r border-[rgb(var(--border))] overflow-y-auto shadow-2xl z-[10000]"
-        onClick={(e) => e.stopPropagation()}
-        style={{ touchAction: 'auto' }}
-        onTouchMove={(e) => {
-          // Allow scrolling within the menu itself
-          e.stopPropagation();
-        }}
-      >
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold">Contents</h2>
+  return (
+    <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="left" className="w-80 max-w-[85vw] overflow-y-auto p-0">
+        <SheetHeader className="p-6 pb-4">
+          <SheetTitle>Contents</SheetTitle>
+        </SheetHeader>
+
+        <div className="px-4 pb-6 space-y-4">
+          {/* Quick Summary */}
+          <div>
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="h-8 w-8 p-0"
+              variant={currentSection === "quick_summary" ? "default" : "ghost"}
+              className={`w-full justify-start h-auto p-3 text-left ${
+                currentSection === "quick_summary"
+                  ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                  : "hover:bg-[rgb(var(--muted))]"
+              }`}
+              onClick={() => handleItemClick("quick_summary", 0)}
             >
-              <X className="h-4 w-4" />
+              <div className="flex items-center gap-3 w-full">
+                <BookOpen className="h-4 w-4 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm">Quick Summary</div>
+                </div>
+              </div>
             </Button>
           </div>
 
-          {/* Contents List */}
-          <div className="space-y-4">
-            {/* Quick Summary */}
+          {/* Key Ideas */}
+          {structuredSummary.key_ideas.length > 0 && (
             <div>
-              <Button
-                variant={currentSection === "quick_summary" ? "default" : "ghost"}
-                className={`w-full justify-start h-auto p-3 text-left ${
-                  currentSection === "quick_summary"
-                    ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
-                    : "hover:bg-[rgb(var(--muted))]"
-                }`}
-                onClick={() => handleItemClick("quick_summary", 0)}
-              >
-                <div className="flex items-center gap-3 w-full">
-                  <BookOpen className="h-4 w-4" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">Quick Summary</div>
-                  </div>
-                </div>
-              </Button>
+              <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
+                Key Ideas
+              </div>
+              <div className="space-y-1">
+                {structuredSummary.key_ideas.map((idea, index) => (
+                  <Button
+                    key={index}
+                    variant={currentSection === "key_ideas" && currentItemIndex === index ? "default" : "ghost"}
+                    className={`w-full justify-start h-auto p-2 text-left text-sm ${
+                      currentSection === "key_ideas" && currentItemIndex === index
+                        ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                        : "hover:bg-[rgb(var(--muted))]"
+                    }`}
+                    onClick={() => handleItemClick("key_ideas", index)}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <Lightbulb className="h-3 w-3 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">{idea.title}</div>
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+              </div>
             </div>
+          )}
 
-            {/* Key Ideas */}
-            {structuredSummary.key_ideas.length > 0 && (
-              <div>
-                <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
-                  Key Ideas
-                </div>
-                <div className="space-y-1">
-                  {structuredSummary.key_ideas.map((idea, index) => (
-                    <Button
-                      key={index}
-                      variant={currentSection === "key_ideas" && currentItemIndex === index ? "default" : "ghost"}
-                      className={`w-full justify-start h-auto p-2 text-left text-sm ${
-                        currentSection === "key_ideas" && currentItemIndex === index
-                          ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
-                          : "hover:bg-[rgb(var(--muted))]"
-                      }`}
-                      onClick={() => handleItemClick("key_ideas", index)}
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <Lightbulb className="h-3 w-3" />
-                        <div className="flex-1 min-w-0">
-                          <div className="truncate">{idea.title}</div>
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
+          {/* Chapters */}
+          {normalChapters.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
+                Chapters
               </div>
-            )}
+              <div className="space-y-1">
+                {normalChapters.map(({ chapter, index }) => (
+                  <Button
+                    key={index}
+                    variant={currentSection === "chapters" && currentItemIndex === index ? "default" : "ghost"}
+                    className={`w-full justify-start h-auto p-2 text-left text-sm ${
+                      currentSection === "chapters" && currentItemIndex === index
+                        ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                        : "hover:bg-[rgb(var(--muted))]"
+                    }`}
+                    onClick={() => handleItemClick("chapters", index)}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <List className="h-3 w-3 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">{chapter.title}</div>
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
-            {/* Chapters */}
-            {normalChapters.length > 0 && (
-              <div>
-                <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
-                  Chapters
-                </div>
-                <div className="space-y-1">
-                  {normalChapters.map(({ chapter, index }) => (
-                    <Button
-                      key={index}
-                      variant={currentSection === "chapters" && currentItemIndex === index ? "default" : "ghost"}
-                      className={`w-full justify-start h-auto p-2 text-left text-sm ${
-                        currentSection === "chapters" && currentItemIndex === index
-                          ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
-                          : "hover:bg-[rgb(var(--muted))]"
-                      }`}
-                      onClick={() => handleItemClick("chapters", index)}
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <List className="h-3 w-3" />
-                        <div className="flex-1 min-w-0">
-                          <div className="truncate">{chapter.title}</div>
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
+          {/* Full pasted summary (lossless) */}
+          {fullPastedChapters.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
+                Full pasted summary
               </div>
-            )}
+              <div className="space-y-1">
+                {fullPastedChapters.map(({ chapter, index }) => (
+                  <Button
+                    key={index}
+                    variant={currentSection === "chapters" && currentItemIndex === index ? "default" : "ghost"}
+                    className={`w-full justify-start h-auto p-2 text-left text-sm ${
+                      currentSection === "chapters" && currentItemIndex === index
+                        ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                        : "hover:bg-[rgb(var(--muted))]"
+                    }`}
+                    onClick={() => handleItemClick("chapters", index)}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <List className="h-3 w-3 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">{chapter.title}</div>
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
-            {/* Full pasted summary (lossless) */}
-            {fullPastedChapters.length > 0 && (
-              <div>
-                <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
-                  Full pasted summary
-                </div>
-                <div className="space-y-1">
-                  {fullPastedChapters.map(({ chapter, index }) => (
-                    <Button
-                      key={index}
-                      variant={currentSection === "chapters" && currentItemIndex === index ? "default" : "ghost"}
-                      className={`w-full justify-start h-auto p-2 text-left text-sm ${
-                        currentSection === "chapters" && currentItemIndex === index
-                          ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
-                          : "hover:bg-[rgb(var(--muted))]"
-                      }`}
-                      onClick={() => handleItemClick("chapters", index)}
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <List className="h-3 w-3" />
-                        <div className="flex-1 min-w-0">
-                          <div className="truncate">{chapter.title}</div>
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
+          {/* Insights */}
+          {structuredSummary.actionable_insights.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
+                Insights
               </div>
-            )}
+              <div className="space-y-1">
+                {structuredSummary.actionable_insights.map((insight, index) => (
+                  <Button
+                    key={index}
+                    variant={currentSection === "actionable_insights" && currentItemIndex === index ? "default" : "ghost"}
+                    className={`w-full justify-start h-auto p-2 text-left text-sm ${
+                      currentSection === "actionable_insights" && currentItemIndex === index
+                        ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                        : "hover:bg-[rgb(var(--muted))]"
+                    }`}
+                    onClick={() => handleItemClick("actionable_insights", index)}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <Target className="h-3 w-3 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">Insight {index + 1}</div>
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
-            {/* Insights */}
-            {summary.actionable_insights.length > 0 && (
-              <div>
-                <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
-                  Insights
-                </div>
-                <div className="space-y-1">
-                  {summary.actionable_insights.map((insight, index) => (
-                    <Button
-                      key={index}
-                      variant={currentSection === "actionable_insights" && currentItemIndex === index ? "default" : "ghost"}
-                      className={`w-full justify-start h-auto p-2 text-left text-sm ${
-                        currentSection === "actionable_insights" && currentItemIndex === index
-                          ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
-                          : "hover:bg-[rgb(var(--muted))]"
-                      }`}
-                      onClick={() => handleItemClick("actionable_insights", index)}
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <Target className="h-3 w-3" />
-                        <div className="flex-1 min-w-0">
-                          <div className="truncate">Insight {index + 1}</div>
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
+          {/* Quotes */}
+          {structuredSummary.quotes.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
+                Quotes
               </div>
-            )}
-
-            {/* Quotes */}
-            {structuredSummary.quotes.length > 0 && (
-              <div>
-                <div className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-2 px-3">
-                  Quotes
-                </div>
-                <div className="space-y-1">
-                  {structuredSummary.quotes.map((quote, index) => (
-                    <Button
-                      key={index}
-                      variant={currentSection === "quotes" && currentItemIndex === index ? "default" : "ghost"}
-                      className={`w-full justify-start h-auto p-2 text-left text-sm ${
-                        currentSection === "quotes" && currentItemIndex === index
-                          ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
-                          : "hover:bg-[rgb(var(--muted))]"
-                      }`}
-                      onClick={() => handleItemClick("quotes", index)}
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <Quote className="h-3 w-3" />
-                        <div className="flex-1 min-w-0">
-                          <div className="truncate">Quote {index + 1}</div>
-                        </div>
+              <div className="space-y-1">
+                {structuredSummary.quotes.map((quote, index) => (
+                  <Button
+                    key={index}
+                    variant={currentSection === "quotes" && currentItemIndex === index ? "default" : "ghost"}
+                    className={`w-full justify-start h-auto p-2 text-left text-sm ${
+                      currentSection === "quotes" && currentItemIndex === index
+                        ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))]"
+                        : "hover:bg-[rgb(var(--muted))]"
+                    }`}
+                    onClick={() => handleItemClick("quotes", index)}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <Quote className="h-3 w-3 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">Quote {index + 1}</div>
                       </div>
-                    </Button>
-                  ))}
-                </div>
+                    </div>
+                  </Button>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
-
-  // Render using portal to ensure it's always on top
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  return createPortal(menuContent, document.body);
 }
-
-
-
-
-
-
