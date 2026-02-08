@@ -105,15 +105,15 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
                 return { label: `Subject ${num}: ${title}`, level: 2 as const };
             }
 
-            // Lesson X: Title, Theme X: Title, Topic X: Title, Unit X: Title, Module X: Title
-            const numberedSectionMatch = cleaned.match(
+            // Cheat Sheet X, Lesson X, etc. — sub-sections within a Subject/Chapter (level 3, TOC only, NOT page breaks)
+            const numberedSubsectionMatch = cleaned.match(
                 /^(?:\*\*)?(Lesson|Theme|Topic|Unit|Module|Section|Cheat\s*Sheet)\s+(\w+)\s*:\s*(.+?)(?:\*\*)?$/i
             );
-            if (numberedSectionMatch) {
-                const kind = numberedSectionMatch[1]!.trim();
-                const num = numberedSectionMatch[2]!;
-                const title = numberedSectionMatch[3]!.trim().replace(/\*+$/, "").trim();
-                return { label: `${kind} ${num}: ${title}`, level: 2 as const };
+            if (numberedSubsectionMatch) {
+                const kind = numberedSubsectionMatch[1]!.trim();
+                const num = numberedSubsectionMatch[2]!;
+                const title = numberedSubsectionMatch[3]!.trim().replace(/\*+$/, "").trim();
+                return { label: `${kind} ${num}: ${title}`, level: 3 as const };
             }
 
             // Known sub-headings
@@ -179,14 +179,19 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         return items;
     }, [displayContent]);
 
-    // Split content into pages based on ALL TOC headings, then merge thin pages
+    // Split content into pages based on level 1 & 2 headings (Parts, Subjects, Chapters), then merge thin pages
     const pages = useMemo(() => {
         if (toc.length === 0) {
             return [{ label: "Summary", content: displayContent, tocIndex: -1 }];
         }
 
-        // Use ALL headings as potential page breaks
-        const pageBreaks = [...toc];
+        // Only level 1 (Parts) and level 2 (Subjects, Chapters, Intro/Conclusion) create page breaks
+        // Level 3 items (Cheat Sheets, Key Techniques, etc.) stay within their parent page
+        const pageBreaks = toc.filter((item) => item.level <= 2);
+
+        if (pageBreaks.length === 0) {
+            return [{ label: "Summary", content: displayContent, tocIndex: -1 }];
+        }
 
         const raw: Array<{ label: string; content: string; tocIndex: number }> = [];
 
