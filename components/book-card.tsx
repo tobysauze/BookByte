@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { Bookmark, Headphones, Play, Pencil, Check, X } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
 
 import {
   Card,
@@ -165,6 +164,7 @@ export function BookCard({
   const [isEditingCategory, setIsEditingCategory] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [optimisticCategory, setOptimisticCategory] = useState<string | null>(null);
+  const [isSummaryRevealed, setIsSummaryRevealed] = useState(false);
 
   const currentCategory = optimisticCategory || getCategory();
 
@@ -173,8 +173,6 @@ export function BookCard({
       setIsEditingCategory(false);
       return;
     }
-
-    const originalCategory = currentCategory;
 
     // Optimistic update
     setOptimisticCategory(newCategory);
@@ -221,6 +219,7 @@ export function BookCard({
   };
 
   const displaySummary = getDisplaySummary();
+  const shouldShowSummary = Boolean(displaySummary && displaySummary !== "No summary available.");
 
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -274,6 +273,13 @@ export function BookCard({
     }
   };
 
+  const handleCardTap = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("button, a, input, textarea, select, [data-no-summary-toggle]")) return;
+    setIsSummaryRevealed((prev) => !prev);
+  };
+
   return (
     <Card className={`group relative overflow-hidden rounded-2xl border-0 shadow-sm transition-all duration-300 hover:shadow-lg ${getCardBackground()}`}>
       {/* Audio indicator */}
@@ -306,7 +312,7 @@ export function BookCard({
         </Button>
       </div>
 
-      <CardContent className="p-6">
+      <CardContent className="p-6" onClick={handleCardTap}>
         {/* Cover Image */}
         <div className="mb-6 flex justify-center">
           <div className="relative h-48 w-32 overflow-hidden rounded-xl shadow-lg">
@@ -390,11 +396,23 @@ export function BookCard({
           {title}
         </h3>
 
-        {/* Author and Short Summary */}
-        <p className="mb-4 text-sm leading-relaxed text-gray-700">
-          {author && `By ${author}. `}
-          {displaySummary}
-        </p>
+        {/* Author and Short Summary (summary shows on hover/tap) */}
+        <div className="mb-4 space-y-2">
+          {author && (
+            <p className="text-sm leading-relaxed text-gray-700">
+              By {author}
+            </p>
+          )}
+          {shouldShowSummary ? (
+            <p
+              className={`text-sm leading-relaxed text-gray-700 overflow-hidden transition-all duration-300 ${
+                isSummaryRevealed ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
+              } group-hover:max-h-40 group-hover:opacity-100`}
+            >
+              {displaySummary}
+            </p>
+          ) : null}
+        </div>
 
         {/* Stats - Only show for structured format */}
         {!isRawText && isStructuredSummary && (
