@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
-import { Bookmark, Headphones, Play, Pencil, Check, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bookmark, Headphones, Pencil, Check, X } from "lucide-react";
 
 
 import {
@@ -165,6 +165,7 @@ export function BookCard({
   const [newCategory, setNewCategory] = useState("");
   const [optimisticCategory, setOptimisticCategory] = useState<string | null>(null);
   const [isSummaryRevealed, setIsSummaryRevealed] = useState(false);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   const currentCategory = optimisticCategory || getCategory();
 
@@ -273,15 +274,43 @@ export function BookCard({
     }
   };
 
-  const handleCardTap = (e: React.MouseEvent) => {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const update = () => setIsTouchDevice(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  const handleCardClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement | null;
     if (!target) return;
     if (target.closest("button, a, input, textarea, select, [data-no-summary-toggle]")) return;
-    setIsSummaryRevealed((prev) => !prev);
+    if (isEditingCategory) return;
+    if (isTouchDevice && shouldShowSummary && !isSummaryRevealed) {
+      setIsSummaryRevealed(true);
+      return;
+    }
+    router.push(`/books/${id}`);
   };
 
   return (
-    <Card className={`group relative overflow-hidden rounded-2xl border-0 shadow-sm transition-all duration-300 hover:shadow-lg ${getCardBackground()}`}>
+    <Card
+      className={`group relative overflow-hidden rounded-2xl border-0 shadow-sm transition-all duration-300 hover:shadow-lg ${getCardBackground()}`}
+      onClick={handleCardClick}
+      role="button"
+      tabIndex={0}
+      onMouseLeave={() => setIsSummaryRevealed(false)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/books/${id}`);
+        }
+      }}
+    >
       {/* Audio indicator */}
       <div className="absolute left-4 top-4 z-10">
         <Button
@@ -312,7 +341,7 @@ export function BookCard({
         </Button>
       </div>
 
-      <CardContent className="p-6" onClick={handleCardTap}>
+      <CardContent className="p-6">
         {/* Cover Image */}
         <div className="mb-6 flex justify-center">
           <div className="relative h-48 w-32 overflow-hidden rounded-xl shadow-lg">
@@ -405,9 +434,9 @@ export function BookCard({
           )}
           {shouldShowSummary ? (
             <p
-              className={`text-sm leading-relaxed text-gray-700 overflow-hidden transition-all duration-300 ${
-                isSummaryRevealed ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
-              } group-hover:max-h-40 group-hover:opacity-100`}
+              className={`text-sm leading-relaxed text-gray-700 overflow-hidden transition-all duration-300 max-h-0 opacity-0 ${
+                isSummaryRevealed ? "max-h-[999px] opacity-100" : ""
+              } group-hover:max-h-[999px] group-hover:opacity-100`}
             >
               {displaySummary}
             </p>
@@ -461,12 +490,6 @@ export function BookCard({
         {/* Action Buttons */}
         <div className="space-y-3">
           <div className="flex gap-2">
-            <Button asChild className="flex-1 rounded-xl bg-gray-900 text-white hover:bg-gray-800">
-              <Link href={`/books/${id}`} className="flex items-center gap-2">
-                <Play className="h-4 w-4" />
-                Continue Reading
-              </Link>
-            </Button>
             {showDeleteButton && (
               <DeleteBookButton bookId={id} bookTitle={title} />
             )}
