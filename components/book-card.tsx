@@ -221,6 +221,12 @@ export function BookCard({
 
   const displaySummary = getDisplaySummary();
   const shouldShowSummary = Boolean(displaySummary && displaySummary !== "No summary available.");
+  const readTimeText =
+    wordCount !== undefined && wordCount !== null
+      ? `${Math.ceil(wordCount / 250)} min read`
+      : isRawText && rawText
+        ? `${Math.ceil(rawText.split(/\s+/).filter((word) => word.length > 0).length / 250)} min read`
+        : null;
 
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -364,8 +370,8 @@ export function BookCard({
           </div>
         </div>
 
-        {/* Category */}
-        <div className="mb-2 flex items-center justify-between h-8">
+        {/* Category + Read time */}
+        <div className="mb-2 flex items-center justify-between gap-3">
           {isEditingCategory ? (
             <div className="flex items-center gap-2 w-full" onClick={(e) => e.preventDefault()}>
               <Select
@@ -418,6 +424,11 @@ export function BookCard({
               )}
             </div>
           )}
+          {readTimeText ? (
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              {readTimeText}
+            </span>
+          ) : null}
         </div>
 
         {/* Title */}
@@ -458,16 +469,7 @@ export function BookCard({
             </span>
           </div>
         )}
-        {(wordCount !== undefined && wordCount !== null) && (
-          <div className="mb-4 text-xs text-gray-500">
-            <span>{Math.ceil(wordCount / 250)} min read</span>
-          </div>
-        )}
-        {!wordCount && isRawText && (
-          <div className="mb-4 text-xs text-gray-500">
-            <span>{rawText ? Math.ceil(rawText.split(/\s+/).filter(word => word.length > 0).length / 250) : 0} min read</span>
-          </div>
-        )}
+        
 
         {/* Progress Bar */}
         {typeof progressPercent === "number" && progressPercent > 0 && (
