@@ -131,3 +131,10 @@ body {
   z-index: -1 !important;
   background: transparent !important;
 }
+
+/* Keep iOS text selection usable while suppressing the native callout menu. */
+.ios-highlight-target {
+  -webkit-touch-callout: none;
+  -webkit-user-select: text;
+  user-select: text;
+}

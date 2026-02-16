@@ -20,17 +20,47 @@ type Highlight = {
 };
 
 const HIGHLIGHT_COLORS = [
-  { name: "yellow", label: "Yellow", bg: "bg-yellow-50/[0.25]", darkBg: "dark:bg-yellow-700" },
-  { name: "green", label: "Green", bg: "bg-green-50/[0.25]", darkBg: "dark:bg-green-700" },
-  { name: "blue", label: "Blue", bg: "bg-blue-50/[0.25]", darkBg: "dark:bg-blue-700" },
-  { name: "pink", label: "Pink", bg: "bg-pink-50/[0.25]", darkBg: "dark:bg-pink-700" },
-  { name: "purple", label: "Purple", bg: "bg-purple-50/[0.25]", darkBg: "dark:bg-purple-700" },
-  { name: "orange", label: "Orange", bg: "bg-orange-50/[0.25]", darkBg: "dark:bg-orange-700" },
+  {
+    name: "yellow",
+    label: "Yellow",
+    highlightBg: "bg-yellow-100/70 dark:bg-yellow-700/60",
+    swatchBg: "bg-yellow-400 dark:bg-yellow-500",
+  },
+  {
+    name: "green",
+    label: "Green",
+    highlightBg: "bg-green-100/70 dark:bg-green-700/60",
+    swatchBg: "bg-green-400 dark:bg-green-500",
+  },
+  {
+    name: "blue",
+    label: "Blue",
+    highlightBg: "bg-blue-100/70 dark:bg-blue-700/60",
+    swatchBg: "bg-blue-400 dark:bg-blue-500",
+  },
+  {
+    name: "pink",
+    label: "Pink",
+    highlightBg: "bg-pink-100/70 dark:bg-pink-700/60",
+    swatchBg: "bg-pink-400 dark:bg-pink-500",
+  },
+  {
+    name: "purple",
+    label: "Purple",
+    highlightBg: "bg-purple-100/70 dark:bg-purple-700/60",
+    swatchBg: "bg-purple-400 dark:bg-purple-500",
+  },
+  {
+    name: "orange",
+    label: "Orange",
+    highlightBg: "bg-orange-100/70 dark:bg-orange-700/60",
+    swatchBg: "bg-orange-400 dark:bg-orange-500",
+  },
 ] as const;
 
 function getHighlightColorClasses(color: string = "yellow") {
   const colorDef = HIGHLIGHT_COLORS.find(c => c.name === color) || HIGHLIGHT_COLORS[0];
-  return `${colorDef.bg} ${colorDef.darkBg}`;
+  return colorDef.highlightBg;
 }
 
 type HighlightableTextProps = {
@@ -66,6 +96,11 @@ export function HighlightableText({
   const textRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  const isTouchDevice = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
+  }, []);
 
   useEffect(() => {
     if (containerRef) {
@@ -184,10 +219,17 @@ export function HighlightableText({
         left: boundedLeft,
         top: positionAbove ? top - buttonHeight - 5 : top + rect.height + 5,
       });
+
+      // On iOS, dismiss the native callout so our palette stays usable.
+      if (isTouchDevice()) {
+        window.setTimeout(() => {
+          window.getSelection()?.removeAllRanges();
+        }, 0);
+      }
     } else {
       clearSelectionState();
     }
-  }, [clearSelectionState, text.length]);
+  }, [clearSelectionState, isTouchDevice, text.length]);
 
   const handleTouchEnd = useCallback(() => {
     // iOS Safari often updates selection after touchend.
@@ -348,10 +390,10 @@ export function HighlightableText({
                 key={color.name}
                 type="button"
                 onClick={() => setSelectedColor(color.name)}
-                className={`w-6 h-6 rounded-full ${color.bg} ${color.darkBg} border-2 transition-all ${
+                className={`w-6 h-6 rounded-full ${color.swatchBg} border-2 transition-all ${
                   selectedColor === color.name
                     ? 'border-gray-900 dark:border-gray-100 scale-110'
-                    : 'border-transparent hover:scale-105'
+                    : 'border-white dark:border-gray-700 hover:scale-105'
                 }`}
                 title={color.label}
                 aria-label={`Select ${color.label} highlight color`}
@@ -390,7 +432,7 @@ export function HighlightableText({
         ref={textRef}
         onMouseUp={syncSelectionState}
         onTouchEnd={handleTouchEnd}
-        className={`select-text ${className}`}
+        className={`select-text ios-highlight-target ${className}`}
       >
         <SummaryText className="leading-relaxed whitespace-pre-wrap">
           {renderHighlightedText()}
