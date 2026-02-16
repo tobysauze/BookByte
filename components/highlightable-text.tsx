@@ -78,9 +78,14 @@ export function HighlightableText({
     h => h.section === section && h.item_index === itemIndex
   ).sort((a, b) => (a.start_offset || 0) - (b.start_offset || 0));
 
-  // Close highlight button when clicking outside
+  const clearSelectionState = useCallback(() => {
+    setSelectedRange(null);
+    setButtonPosition(null);
+  }, []);
+
+  // Close highlight button when interacting outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleInteractOutside = (event: MouseEvent | TouchEvent) => {
       if (
         selectedRange &&
         buttonRef.current &&
@@ -88,19 +93,20 @@ export function HighlightableText({
         textRef.current &&
         !textRef.current.contains(event.target as Node)
       ) {
-        setSelectedRange(null);
-        setButtonPosition(null);
+        clearSelectionState();
         window.getSelection()?.removeAllRanges();
       }
     };
 
     if (selectedRange) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleInteractOutside);
+      document.addEventListener("touchstart", handleInteractOutside);
       return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener("mousedown", handleInteractOutside);
+        document.removeEventListener("touchstart", handleInteractOutside);
       };
     }
-  }, [selectedRange]);
+  }, [clearSelectionState, selectedRange]);
 
   const getOffsetsFromRange = (range: Range, root: HTMLElement) => {
     // Compute absolute offsets based on the actual DOM selection, not indexOf(selectedText).
@@ -113,11 +119,15 @@ export function HighlightableText({
     return { start, end, selected };
   };
 
-  const handleMouseUp = useCallback(() => {
+  const syncSelectionState = useCallback(() => {
     if (!textRef.current) return;
 
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
+    if (selection.isCollapsed) {
+      clearSelectionState();
+      return;
+    }
 
     const range = selection.getRangeAt(0);
     let { start, end, selected } = getOffsetsFromRange(range, textRef.current);
@@ -131,15 +141,13 @@ export function HighlightableText({
     const selectedText = selected;
 
     if (selectedText.length === 0) {
-      setSelectedRange(null);
-      setButtonPosition(null);
+      clearSelectionState();
       return;
     }
 
     // Check if selection is within our text element
     if (!textRef.current.contains(range.commonAncestorContainer)) {
-      setSelectedRange(null);
-      setButtonPosition(null);
+      clearSelectionState();
       return;
     }
 
@@ -177,10 +185,32 @@ export function HighlightableText({
         top: positionAbove ? top - buttonHeight - 5 : top + rect.height + 5,
       });
     } else {
-      setSelectedRange(null);
-      setButtonPosition(null);
+      clearSelectionState();
     }
-  }, [text.length]);
+  }, [clearSelectionState, text.length]);
+
+  const handleTouchEnd = useCallback(() => {
+    // iOS Safari often updates selection after touchend.
+    window.setTimeout(() => {
+      syncSelectionState();
+    }, 0);
+  }, [syncSelectionState]);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+      if (!textRef.current) return;
+      const range = selection.getRangeAt(0);
+      if (!textRef.current.contains(range.commonAncestorContainer)) return;
+      syncSelectionState();
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [syncSelectionState]);
 
   const handleCreateHighlight = async () => {
     if (!selectedRange) return;
@@ -344,8 +374,7 @@ export function HighlightableText({
               size="sm"
               variant="ghost"
               onClick={() => {
-                setSelectedRange(null);
-                setButtonPosition(null);
+                clearSelectionState();
                 window.getSelection()?.removeAllRanges();
               }}
               className="shadow-lg bg-white dark:bg-gray-800"
@@ -359,7 +388,8 @@ export function HighlightableText({
       {/* Highlighted text */}
       <div
         ref={textRef}
-        onMouseUp={handleMouseUp}
+        onMouseUp={syncSelectionState}
+        onTouchEnd={handleTouchEnd}
         className={`select-text ${className}`}
       >
         <SummaryText className="leading-relaxed whitespace-pre-wrap">
