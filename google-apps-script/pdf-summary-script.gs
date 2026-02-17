@@ -402,6 +402,18 @@ function toTitleCase_(s) {
 function parseTitleAuthorFromBase_(base) {
   let t = String(base || "").trim();
 
+  // Strip common PDF download-site prefixes/suffixes from filenames
+  t = t.replace(/^[_\s]*OceanofPDF\.com[_\s]*/i, "");
+  t = t.replace(/[_\s]*OceanofPDF\.com[_\s]*$/i, "");
+  t = t.replace(/^[_\s]*(?:www\.)?z-lib\.org[_\s]*/i, "");
+  t = t.replace(/^[_\s]*(?:www\.)?libgen\.\w+[_\s]*/i, "");
+  t = t.replace(/^[_\s]*(?:www\.)?pdfdrive\.com[_\s]*/i, "");
+  t = t.replace(/^[_\s]*\(?(?:www\.)?[\w-]+\.(?:com|org|net|io)\)?[_\s]*[-–—]?\s*/i, function(match) {
+    // Only strip if it looks like a website prefix (not a real title word)
+    if (/\.(com|org|net|io)/i.test(match)) return "";
+    return match;
+  });
+
   // Remove trailing "Summary"
   t = t.replace(/\s*(?:—|–|-)\s*summary\s*$/i, "").trim();
   t = t.replace(/\s*\bsummary\s*$/i, "").trim();

@@ -22,10 +22,19 @@ function syncFolder() {
     const baseName = name.replace(/\.[^.]+$/, ""); // strip extension
     const mime = file.getMimeType();
 
+    // Clean up download-site prefixes from filename
+    let cleanedBase = baseName.trim();
+    cleanedBase = cleanedBase.replace(/^[_\s]*OceanofPDF\.com[_\s]*/i, "");
+    cleanedBase = cleanedBase.replace(/[_\s]*OceanofPDF\.com[_\s]*$/i, "");
+    cleanedBase = cleanedBase.replace(/^[_\s]*(?:www\.)?z-lib\.org[_\s]*/i, "");
+    cleanedBase = cleanedBase.replace(/^[_\s]*(?:www\.)?libgen\.\w+[_\s]*/i, "");
+    cleanedBase = cleanedBase.replace(/^[_\s]*(?:www\.)?pdfdrive\.com[_\s]*/i, "");
+    cleanedBase = cleanedBase.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+
     // Extract title/author from filename like: "Miracle Morning by Hal Elrod"
-    let parsedTitle = baseName.trim();
+    let parsedTitle = cleanedBase;
     let parsedAuthor = null;
-    const m = baseName.match(/^(.*?)\s+by\s+(.+)$/i);
+    const m = cleanedBase.match(/^(.*?)\s+by\s+(.+)$/i);
     if (m) {
       parsedTitle = (m[1] || "").trim() || parsedTitle;
       parsedAuthor = (m[2] || "").trim() || null;
