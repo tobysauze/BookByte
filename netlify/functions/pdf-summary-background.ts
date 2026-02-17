@@ -399,7 +399,17 @@ async function estimateKimiTokens(params: { model: string; messages: KimiMessage
     return await doRequest(primaryBaseUrl, "primary");
   } catch (e1) {
     console.warn("[pdf-summary] Primary token estimate failed, trying fallback.", e1);
-    return await doRequest(fallbackBaseUrl, "fallback");
+    try {
+      return await doRequest(fallbackBaseUrl, "fallback");
+    } catch (e2) {
+      // Both Moonshot endpoints failed — use a rough character-based estimate.
+      // ~4 characters per token is a reasonable approximation for mixed content.
+      console.warn("[pdf-summary] Both Moonshot token estimate endpoints failed. Using character-based estimate.", e2);
+      const totalChars = params.messages.reduce((sum, m) => sum + (m.content || "").length, 0);
+      const estimate = Math.ceil(totalChars / 4);
+      console.log(`[pdf-summary] Character-based token estimate: ${totalChars} chars -> ~${estimate} tokens`);
+      return estimate;
+    }
   }
 }
 
@@ -422,17 +432,39 @@ async function callKimiChat(params: {
   messages: KimiMessage[];
   maxTokens: number;
 }) : Promise<KimiChatResult> {
-  // Moonshot/Kimi API is OpenAI-compatible. Docs:
-  // - Base URL: https://api.moonshot.ai/v1
-  // - POST /chat/completions
-  const apiKey = process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing required environment variable: MOONSHOT_API_KEY");
+  // Hard timeout so jobs don't get stuck in "running" forever.
+  const timeoutMs = clampInt(process.env.PDF_SUMMARY_KIMI_TIMEOUT_MS, 12 * 60_000, 30_000, 20 * 60_000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    // Try Moonshot direct API first, then fall back to OpenRouter.
+    const moonshotResult = await callKimiViaMoonshot_(params, controller);
+    if (moonshotResult) return moonshotResult;
+  } catch {
+    // Moonshot failed entirely — fall through to OpenRouter.
   }
 
-  // Moonshot docs reference both api.moonshot.ai and api.moonshot.cn in examples.
-  // Some hosts/environments have intermittent DNS/TLS routing issues to one or the other,
-  // so we try the configured base URL first, then fall back.
+  try {
+    const openRouterResult = await callKimiViaOpenRouter_(params, controller);
+    clearTimeout(timeout);
+    return openRouterResult;
+  } catch (orErr) {
+    clearTimeout(timeout);
+    throw orErr;
+  }
+}
+
+async function callKimiViaMoonshot_(
+  params: { model: string; messages: KimiMessage[]; maxTokens: number },
+  controller: AbortController,
+): Promise<KimiChatResult | null> {
+  const apiKey = process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY;
+  if (!apiKey) {
+    console.warn("[pdf-summary] No MOONSHOT_API_KEY set, skipping Moonshot direct.");
+    return null;
+  }
+
   const primaryBaseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1").replace(/\/+$/, "");
   const fallbackBaseUrl = (process.env.MOONSHOT_FALLBACK_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/+$/, "");
 
@@ -442,18 +474,11 @@ async function callKimiChat(params: {
     max_tokens: params.maxTokens,
   };
 
-  // kimi-k2.5 has fixed sampling parameters; sending temperature/top_p/etc can error.
   if (params.model === "kimi-k2.5") {
     body.thinking = { type: "enabled" };
   } else {
     body.temperature = 0.35;
   }
-
-  // Hard timeout so jobs don't get stuck in "running" forever.
-  // If this triggers, the worker will throw and mark the job as error.
-  const timeoutMs = clampInt(process.env.PDF_SUMMARY_KIMI_TIMEOUT_MS, 12 * 60_000, 30_000, 20 * 60_000);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   const doRequest = async (baseUrl: string, which: "primary" | "fallback") => {
     const endpoint = `${baseUrl}/chat/completions`;
@@ -483,16 +508,76 @@ async function callKimiChat(params: {
     res = await doRequest(primaryBaseUrl, "primary");
   } catch (e1) {
     console.warn("[pdf-summary] Primary Kimi base URL failed, trying fallback.", e1);
-    res = await doRequest(fallbackBaseUrl, "fallback");
+    try {
+      res = await doRequest(fallbackBaseUrl, "fallback");
+    } catch (e2) {
+      console.warn("[pdf-summary] Both Moonshot endpoints failed.", e2);
+      return null;
+    }
   }
-  clearTimeout(timeout);
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`Kimi API error: ${res.status} ${res.statusText}${errText ? ` - ${errText}` : ""}`);
+    console.warn(`[pdf-summary] Moonshot API returned ${res.status}: ${errText}`);
+    return null;
   }
 
-  const data: unknown = await res.json();
+  return parseKimiChatResponse_(await res.json(), "Moonshot");
+}
+
+async function callKimiViaOpenRouter_(
+  params: { model: string; messages: KimiMessage[]; maxTokens: number },
+  controller: AbortController,
+): Promise<KimiChatResult> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("Both Moonshot and OpenRouter API keys are missing. Cannot call Kimi.");
+  }
+
+  const openRouterModel = process.env.OPENROUTER_KIMI_MODEL || "moonshotai/kimi-k2.5";
+  console.log(`[pdf-summary] Falling back to OpenRouter with model: ${openRouterModel}`);
+
+  // Strip the `partial` and `name` fields that OpenRouter doesn't support,
+  // and map messages to standard OpenAI format.
+  const messages = params.messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const body: Record<string, unknown> = {
+    model: openRouterModel,
+    messages,
+    max_tokens: params.maxTokens,
+    temperature: 0.35,
+  };
+
+  const endpoint = "https://openrouter.ai/api/v1/chat/completions";
+  const res = await fetchWithRetries(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.BOOKBYTE_BASE_URL || "https://bookbytee.netlify.app",
+        "X-Title": "BookByte PDF Summarizer",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    },
+    "Kimi API (OpenRouter)",
+    3,
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`OpenRouter Kimi API error: ${res.status} ${res.statusText}${errText ? ` - ${errText}` : ""}`);
+  }
+
+  return parseKimiChatResponse_(await res.json(), "OpenRouter");
+}
+
+function parseKimiChatResponse_(data: unknown, source: string): KimiChatResult {
   const parsed = (() => {
     if (!data || typeof data !== "object") return null;
     const choices = (data as { choices?: unknown }).choices;
@@ -509,7 +594,7 @@ async function callKimiChat(params: {
     };
   })();
   if (!parsed || typeof parsed.content !== "string" || parsed.content.trim().length === 0) {
-    throw new Error("Kimi API returned empty content.");
+    throw new Error(`${source} Kimi API returned empty content.`);
   }
   return { content: parsed.content.trim(), finishReason: parsed.finishReason };
 }

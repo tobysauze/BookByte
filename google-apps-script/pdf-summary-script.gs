@@ -1,8 +1,9 @@
 /**
  * BookByte PDF -> Kimi summary automation (Google Apps Script)
  *
- * 1 PDF / day behavior:
- * - submitNewPdfJobs() runs once/day and will submit at most ONE PDF
+ * Scheduled + priority behavior:
+ * - submitScheduledPdfJobs() runs 4x/day (evenly spaced) and submits at most ONE PDF each run
+ * - submitPriorityPdfJobs() scans a priority folder frequently and submits at most ONE PDF per scan
  * - It will NOT submit a new PDF if there is already a tracked job in progress
  * - pollPdfJobs() runs every 15 minutes and advances that one job
  * - pollPdfJobs() AUTO-KICKS when status is queued (multi-chunk continuation)
@@ -15,6 +16,10 @@
  *  - DONE_FOLDER_ID
  *
  * Optional Script Properties:
+ *  - PRIORITY_SOURCE_FOLDER_ID     (if set, files in this folder are picked up by submitPriorityPdfJobs)
+ *  - SCHEDULED_SUBMIT_HOURS        (default "0,6,12,18")
+ *  - PRIORITY_SCAN_MINUTES         (default "5")
+ *  - JOB_POLL_INTERVAL_MINUTES     (default "15")
  *  - KIMI_MODEL (default "kimi-k2.5")
  *  - MAX_SCAN_FILES (default "200")
  */
@@ -22,14 +27,21 @@
 function install() {
   deleteExistingTriggers_();
 
-  // ⬅️ CHANGE THESE NUMBERS to set your preferred times:
-  const submitHour = 2;        // Hour to submit new PDF (0-23, where 0 = midnight, 14 = 2 PM)
-  const pollIntervalMinutes = 15;  // How often to check job status (in minutes)
+  const submitHours = parseScheduledSubmitHours_(getProp_("SCHEDULED_SUBMIT_HOURS"));
+  const priorityScanMinutes = normalizeEveryMinutes_(getProp_("PRIORITY_SCAN_MINUTES"), 5);
+  const pollIntervalMinutes = normalizeEveryMinutes_(getProp_("JOB_POLL_INTERVAL_MINUTES"), 15);
 
-  ScriptApp.newTrigger("submitNewPdfJobs")
+  submitHours.forEach(hour => {
+    ScriptApp.newTrigger("submitScheduledPdfJobs")
+      .timeBased()
+      .everyDays(1)
+      .atHour(hour)
+      .create();
+  });
+
+  ScriptApp.newTrigger("submitPriorityPdfJobs")
     .timeBased()
-    .everyDays(1)
-    .atHour(submitHour)
+    .everyMinutes(priorityScanMinutes)
     .create();
 
   ScriptApp.newTrigger("pollPdfJobs")
@@ -37,12 +49,31 @@ function install() {
     .everyMinutes(pollIntervalMinutes)
     .create();
 
-  Logger.log("Installed triggers for 1 PDF/day + polling.");
-  Logger.log("PDF submission: daily at " + submitHour + ":00");
+  Logger.log("Installed triggers for scheduled + priority PDF processing.");
+  Logger.log("Scheduled submission hours: " + submitHours.join(", "));
+  Logger.log("Priority folder scan: every " + priorityScanMinutes + " minutes");
   Logger.log("Job polling: every " + pollIntervalMinutes + " minutes");
 }
 
+function submitScheduledPdfJobs() {
+  submitNextPdfJobFromFolder_("scheduled", getConfig_().SOURCE_FOLDER_ID);
+}
+
+function submitPriorityPdfJobs() {
+  const cfg = getConfig_();
+  if (!cfg.PRIORITY_SOURCE_FOLDER_ID) {
+    Logger.log("submitPriorityPdfJobs: PRIORITY_SOURCE_FOLDER_ID not set. Skipping.");
+    return;
+  }
+  submitNextPdfJobFromFolder_("priority", cfg.PRIORITY_SOURCE_FOLDER_ID);
+}
+
+// Backwards-compatible function name used by older triggers/scripts.
 function submitNewPdfJobs() {
+  submitScheduledPdfJobs();
+}
+
+function submitNextPdfJobFromFolder_(sourceLabel, sourceFolderId) {
   try {
     const cfg = getConfig_();
     const jobsState = getJobsState_();
@@ -50,24 +81,26 @@ function submitNewPdfJobs() {
     // Enforce "one at a time": if a job is already tracked, do nothing.
     const trackedCount = Object.keys(jobsState).length;
     if (trackedCount > 0) {
-      Logger.log(`submitNewPdfJobs: ${trackedCount} job(s) already tracked. Skipping new submission.`);
+      Logger.log(
+        `submitNextPdfJobFromFolder_(${sourceLabel}): ${trackedCount} job(s) already tracked. Skipping new submission.`
+      );
       return;
     }
 
     const maxScan = Number(getProp_("MAX_SCAN_FILES") || "200");
 
     const source = withRetries_(
-      () => DriveApp.getFolderById(cfg.SOURCE_FOLDER_ID),
-      "DriveApp.getFolderById(SOURCE_FOLDER_ID)"
+      () => DriveApp.getFolderById(sourceFolderId),
+      `DriveApp.getFolderById(${sourceLabel})`
     );
 
     const nextPdf = withRetries_(
       () => pickNextUntrackedPdf_(source, jobsState, maxScan),
-      "pickNextUntrackedPdf_"
+      `pickNextUntrackedPdf_(${sourceLabel})`
     );
 
     if (!nextPdf) {
-      Logger.log("submitNewPdfJobs: No untracked PDFs found in source folder.");
+      Logger.log(`submitNextPdfJobFromFolder_(${sourceLabel}): No untracked PDFs found.`);
       return;
     }
 
@@ -103,16 +136,19 @@ function submitNewPdfJobs() {
       jobsState[fileId] = {
         jobId: jobId,
         fileName: fileName,
+        sourceLabel: sourceLabel,
         createdAtIso: new Date().toISOString(),
       };
       setJobsState_(jobsState);
-      Logger.log(`Created job for ${fileName}: ${jobId}`);
+      Logger.log(`Created ${sourceLabel} job for ${fileName}: ${jobId}`);
       return;
     }
 
-    Logger.log(`Failed to create job for ${fileName}. HTTP ${res.status}. Body: ${res.text}`);
+    Logger.log(
+      `Failed to create ${sourceLabel} job for ${fileName}. HTTP ${res.status}. Body: ${res.text}`
+    );
   } catch (e) {
-    Logger.log(`submitNewPdfJobs crashed: ${stringifyError_(e)}`);
+    Logger.log(`submitNextPdfJobFromFolder_(${sourceLabel}) crashed: ${stringifyError_(e)}`);
     throw e;
   }
 }
@@ -203,6 +239,13 @@ function pollPdfJobs() {
       );
       Logger.log(`Wrote summary: ${finalName}`);
 
+      // Auto-import into BookByte immediately
+      try {
+        importToBookByte_(cfg, entry.fileName, resultText);
+      } catch (importErr) {
+        Logger.log(`Auto-import failed (summary is still saved to Drive): ${stringifyError_(importErr)}`);
+      }
+
       // Move the PDF
       try {
         const pdfFile = withRetries_(() => DriveApp.getFileById(fileId), "DriveApp.getFileById");
@@ -261,12 +304,78 @@ function kickQueuedJob() {
   Logger.log(`Kick response HTTP ${res.status}: ${res.text}`);
 }
 
+/* ---------------- auto-import helper ---------------- */
+
+function importToBookByte_(cfg, originalFileName, summaryText) {
+  const base = stripExt_(originalFileName || "Untitled");
+  const parsed = parseTitleAuthorFromBase_(base);
+  const title = toTitleCase_(parsed.title || "Untitled");
+  const author = parsed.author ? toTitleCase_(parsed.author) : null;
+
+  const importUrl = cfg.BOOKBYTE_BASE_URL.replace(/\/+$/, "") + "/api/import/google-drive";
+  const coverBgUrl = cfg.BOOKBYTE_BASE_URL.replace(/\/+$/, "") + "/.netlify/functions/generate-cover-background";
+
+  const payload = {
+    title: title,
+    author: author,
+    text: summaryText,
+    isPublic: false,
+    source: "google_drive",
+  };
+
+  const res = withRetries_(
+    () =>
+      urlFetchJson_({
+        url: importUrl,
+        method: "post",
+        headers: {
+          "content-type": "application/json",
+          "x-import-secret": cfg.BOOKBYTE_IMPORT_SECRET,
+        },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true,
+      }),
+    "POST /api/import/google-drive"
+  );
+
+  if (!(res.status >= 200 && res.status < 300) || !res.json || !res.json.bookId) {
+    Logger.log(`BookByte import failed. HTTP ${res.status}. Body: ${res.text}`);
+    return;
+  }
+
+  const bookId = res.json.bookId;
+  Logger.log(`Imported into BookByte: "${title}" -> bookId: ${bookId}`);
+
+  // Trigger cover generation (non-blocking)
+  try {
+    const coverRes = urlFetchJson_({
+      url: coverBgUrl,
+      method: "post",
+      headers: {
+        "content-type": "application/json",
+        "x-import-secret": cfg.BOOKBYTE_IMPORT_SECRET,
+      },
+      payload: JSON.stringify({ bookId: bookId }),
+      muteHttpExceptions: true,
+    });
+
+    if (coverRes.status >= 200 && coverRes.status < 300) {
+      Logger.log(`Cover generation triggered for bookId: ${bookId}`);
+    } else {
+      Logger.log(`Cover generation trigger failed: HTTP ${coverRes.status}`);
+    }
+  } catch (coverErr) {
+    Logger.log(`Cover generation trigger threw: ${stringifyError_(coverErr)}`);
+  }
+}
+
 /* ---------------- helpers ---------------- */
 
 function getConfig_() {
   const BOOKBYTE_BASE_URL = mustGetProp_("BOOKBYTE_BASE_URL");
   const BOOKBYTE_IMPORT_SECRET = mustGetProp_("BOOKBYTE_IMPORT_SECRET");
   const SOURCE_FOLDER_ID = mustGetProp_("SOURCE_FOLDER_ID");
+  const PRIORITY_SOURCE_FOLDER_ID = getProp_("PRIORITY_SOURCE_FOLDER_ID");
   const OUTPUT_FOLDER_ID = mustGetProp_("OUTPUT_FOLDER_ID");
   const DONE_FOLDER_ID = mustGetProp_("DONE_FOLDER_ID");
   const KIMI_MODEL = getProp_("KIMI_MODEL") || "kimi-k2.5";
@@ -275,6 +384,7 @@ function getConfig_() {
     BOOKBYTE_BASE_URL,
     BOOKBYTE_IMPORT_SECRET,
     SOURCE_FOLDER_ID,
+    PRIORITY_SOURCE_FOLDER_ID,
     OUTPUT_FOLDER_ID,
     DONE_FOLDER_ID,
     KIMI_MODEL,
@@ -437,10 +547,36 @@ function deleteExistingTriggers_() {
   const triggers = ScriptApp.getProjectTriggers();
   for (const t of triggers) {
     const fn = t.getHandlerFunction();
-    if (fn === "submitNewPdfJobs" || fn === "pollPdfJobs") {
+    if (
+      fn === "submitNewPdfJobs" ||
+      fn === "submitScheduledPdfJobs" ||
+      fn === "submitPriorityPdfJobs" ||
+      fn === "pollPdfJobs"
+    ) {
       ScriptApp.deleteTrigger(t);
     }
   }
+}
+
+function parseScheduledSubmitHours_(raw) {
+  const fallback = [0, 6, 12, 18];
+  const text = String(raw || "").trim();
+  if (!text) return fallback;
+
+  const parsed = text
+    .split(",")
+    .map(part => Number(String(part).trim()))
+    .filter(n => Number.isInteger(n) && n >= 0 && n <= 23);
+
+  const uniqueSorted = Array.from(new Set(parsed)).sort((a, b) => a - b);
+  return uniqueSorted.length > 0 ? uniqueSorted : fallback;
+}
+
+function normalizeEveryMinutes_(raw, fallback) {
+  const allowed = [1, 5, 10, 15, 30];
+  const n = Number(raw || fallback);
+  if (allowed.indexOf(n) !== -1) return n;
+  return fallback;
 }
 
 function stringifyError_(e) {
@@ -459,11 +595,10 @@ function stringifyError_(e) {
 /* ---------------- TEST FUNCTIONS ---------------- */
 
 /**
- * Test function - run this manually to test submitNewPdfJobs() right now
- * This simulates what will happen at 2 AM
+ * Test function - run this manually to test scheduled source submission right now.
  */
 function testSubmitNewPdfJobs() {
-  Logger.log('=== Starting test run of submitNewPdfJobs() ===');
+  Logger.log('=== Starting test run of submitScheduledPdfJobs() ===');
   Logger.log('Time: ' + new Date().toISOString());
   
   try {
@@ -471,6 +606,7 @@ function testSubmitNewPdfJobs() {
     Logger.log('✓ Configuration loaded successfully');
     Logger.log('  - Base URL: ' + cfg.BOOKBYTE_BASE_URL);
     Logger.log('  - Source Folder ID: ' + cfg.SOURCE_FOLDER_ID);
+    Logger.log('  - Priority Source Folder ID: ' + (cfg.PRIORITY_SOURCE_FOLDER_ID || '(not set)'));
     Logger.log('  - Output Folder ID: ' + cfg.OUTPUT_FOLDER_ID);
     Logger.log('  - Done Folder ID: ' + cfg.DONE_FOLDER_ID);
     Logger.log('  - Kimi Model: ' + cfg.KIMI_MODEL);
@@ -492,7 +628,7 @@ function testSubmitNewPdfJobs() {
     Logger.log('✓ Currently tracking ' + trackedCount + ' job(s)');
     
     if (trackedCount > 0) {
-      Logger.log('⚠️  Warning: There are already tracked jobs. submitNewPdfJobs() will skip.');
+      Logger.log('⚠️  Warning: There are already tracked jobs. submitScheduledPdfJobs() will skip.');
       Logger.log('   Tracked jobs: ' + JSON.stringify(jobsState, null, 2));
     }
     
@@ -510,13 +646,43 @@ function testSubmitNewPdfJobs() {
     Logger.log('✓ Found ' + pdfCount + ' PDF file(s) out of ' + totalCount + ' total file(s)');
     
     // Run the actual function
-    Logger.log('Running submitNewPdfJobs()...');
-    submitNewPdfJobs();
+    Logger.log('Running submitScheduledPdfJobs()...');
+    submitScheduledPdfJobs();
     
     Logger.log('=== Test completed successfully! ===');
     Logger.log('Check the logs above for any job creation.');
     Logger.log('If a job was created, run testPollPdfJobs() to check its status.');
     
+  } catch (error) {
+    Logger.log('=== TEST FAILED ===');
+    Logger.log('Error: ' + error.toString());
+    Logger.log('Stack: ' + (error.stack || 'No stack trace'));
+    throw error;
+  }
+}
+
+/**
+ * Test function - run this manually to test priority folder submission right now.
+ */
+function testSubmitPriorityPdfJobs() {
+  Logger.log('=== Starting test run of submitPriorityPdfJobs() ===');
+  Logger.log('Time: ' + new Date().toISOString());
+
+  try {
+    const cfg = getConfig_();
+    if (!cfg.PRIORITY_SOURCE_FOLDER_ID) {
+      Logger.log('⚠️  PRIORITY_SOURCE_FOLDER_ID is not set.');
+      Logger.log('Set it in Script Properties, then re-run this test.');
+      return;
+    }
+
+    const priorityFolder = DriveApp.getFolderById(cfg.PRIORITY_SOURCE_FOLDER_ID);
+    Logger.log('✓ Priority folder accessed: ' + priorityFolder.getName());
+
+    Logger.log('Running submitPriorityPdfJobs()...');
+    submitPriorityPdfJobs();
+
+    Logger.log('=== Test completed successfully! ===');
   } catch (error) {
     Logger.log('=== TEST FAILED ===');
     Logger.log('Error: ' + error.toString());
@@ -639,9 +805,10 @@ function checkCurrentTime() {
   Logger.log('Hour (0-23): ' + now.getHours());
   Logger.log('');
   Logger.log('Your triggers will run based on this timezone.');
-  Logger.log('Current trigger settings:');
-  Logger.log('  - PDF submission: daily at 15:00 (3 PM)');
-  Logger.log('  - Job polling: every 15 minutes');
+  Logger.log('Current trigger settings (based on Script Properties/defaults):');
+  Logger.log('  - Scheduled submission hours: ' + parseScheduledSubmitHours_(getProp_("SCHEDULED_SUBMIT_HOURS")).join(', '));
+  Logger.log('  - Priority folder scan: every ' + normalizeEveryMinutes_(getProp_("PRIORITY_SCAN_MINUTES"), 5) + ' minutes');
+  Logger.log('  - Job polling: every ' + normalizeEveryMinutes_(getProp_("JOB_POLL_INTERVAL_MINUTES"), 15) + ' minutes');
   Logger.log('');
   Logger.log('To change timezone: Project Settings → Time zone');
 }
