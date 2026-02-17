@@ -41,6 +41,8 @@ type BookCardProps = {
   isRead?: boolean;
   isFavorited?: boolean;
   showLibraryActions?: boolean;
+  disableNavigation?: boolean;
+  onSelectionClick?: () => void;
 };
 
 export function BookCard({
@@ -50,7 +52,9 @@ export function BookCard({
   isSavedToLibrary = false,
   isRead = false,
   isFavorited = false,
-  showLibraryActions = false
+  showLibraryActions = false,
+  disableNavigation = false,
+  onSelectionClick,
 }: BookCardProps) {
   const {
     id,
@@ -296,6 +300,10 @@ export function BookCard({
     if (!target) return;
     if (target.closest("button, a, input, textarea, select, [data-no-summary-toggle]")) return;
     if (isEditingCategory) return;
+    if (disableNavigation && onSelectionClick) {
+      onSelectionClick();
+      return;
+    }
     if (isTouchDevice && shouldShowSummary && !isSummaryRevealed) {
       setIsSummaryRevealed(true);
       return;

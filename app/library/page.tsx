@@ -209,6 +209,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
                     userRole={userRole}
                     showDeleteButtons={false}
                     showLibraryActions={true}
+                    enableMultiSelect={userRole === "editor"}
                 />
             ) : (
                 <div className="rounded-3xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card))] p-12 text-center text-sm text-[rgb(var(--muted-foreground))]">
