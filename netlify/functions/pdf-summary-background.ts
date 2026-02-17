@@ -522,7 +522,20 @@ async function callKimiViaMoonshot_(
     return null;
   }
 
-  return parseKimiChatResponse_(await res.json(), "Moonshot");
+  const rawText = await res.text().catch(() => "");
+  if (!rawText) {
+    console.warn("[pdf-summary] Moonshot API returned empty response body.");
+    return null;
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    console.warn(`[pdf-summary] Moonshot API returned invalid JSON (${rawText.length} chars): ${rawText.slice(0, 200)}`);
+    return null;
+  }
+
+  return parseKimiChatResponse_(data, "Moonshot");
 }
 
 async function callKimiViaOpenRouter_(
@@ -534,7 +547,7 @@ async function callKimiViaOpenRouter_(
     throw new Error("Both Moonshot and OpenRouter API keys are missing. Cannot call Kimi.");
   }
 
-  const openRouterModel = process.env.OPENROUTER_KIMI_MODEL || "moonshotai/kimi-k2.5";
+  const openRouterModel = process.env.OPENROUTER_KIMI_MODEL || "moonshotai/kimi-k2-thinking";
   console.log(`[pdf-summary] Falling back to OpenRouter with model: ${openRouterModel}`);
 
   // Strip the `partial` and `name` fields that OpenRouter doesn't support,
@@ -574,7 +587,18 @@ async function callKimiViaOpenRouter_(
     throw new Error(`OpenRouter Kimi API error: ${res.status} ${res.statusText}${errText ? ` - ${errText}` : ""}`);
   }
 
-  return parseKimiChatResponse_(await res.json(), "OpenRouter");
+  const rawText = await res.text().catch(() => "");
+  if (!rawText) {
+    throw new Error("OpenRouter Kimi API returned empty response body.");
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    throw new Error(`OpenRouter Kimi API returned invalid JSON (${rawText.length} chars): ${rawText.slice(0, 200)}`);
+  }
+
+  return parseKimiChatResponse_(data, "OpenRouter");
 }
 
 function parseKimiChatResponse_(data: unknown, source: string): KimiChatResult {
