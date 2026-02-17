@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
-import { canDeleteBookWithClient } from "@/lib/user-roles";
+import { isEditor } from "@/lib/user-roles";
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -37,8 +37,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Check permission (must be editor/admin to bulk delete)
-    const canDelete = await canDeleteBookWithClient(supabase, "");
-    if (!canDelete) {
+    const editorAccess = await isEditor();
+    if (!editorAccess) {
       return applyCookies(
         NextResponse.json(
           { error: "Only editors can bulk delete books" },
