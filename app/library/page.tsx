@@ -19,27 +19,28 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
     }
 
     // Get user's library items (saved books)
-    let libraryQuery = supabase
-        .from("user_library")
-        .select(`
-      book_id,
-      books:book_id (
+    const bookFields = `
         id,
         title,
         author,
         cover_url,
-        summary,
         progress_percent,
         word_count,
         description,
         category,
         is_public,
         created_at
-      ),
-      is_read,
-      is_favorited,
-      updated_at
-    `)
+    `;
+
+    let libraryQuery = supabase
+        .from("user_library")
+        .select(`
+            book_id,
+            books:book_id (${bookFields}),
+            is_read,
+            is_favorited,
+            updated_at
+        `)
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(500);
@@ -49,19 +50,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
             .from("user_library")
             .select(`
                 book_id,
-                books:book_id!inner (
-                    id,
-                    title,
-                    author,
-                    cover_url,
-                    summary,
-                    progress_percent,
-                    word_count,
-                    description,
-                    category,
-                    is_public,
-                    created_at
-                ),
+                books:book_id!inner (${bookFields}),
                 is_read,
                 is_favorited,
                 updated_at
@@ -75,19 +64,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
     // Get user's authored books
     let authoredQuery = supabase
         .from("books")
-        .select(`
-      id,
-      title,
-      author,
-      cover_url,
-      summary,
-      progress_percent,
-      word_count,
-      description,
-      category,
-      is_public,
-      created_at
-    `)
+        .select(bookFields)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(500);
