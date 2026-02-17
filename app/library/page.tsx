@@ -42,18 +42,9 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
     `)
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
-        .limit(50);
+        .limit(500);
 
     if (searchParams?.category && searchParams.category !== "all") {
-        // Filter referencing the joined table needs !inner hint to filter the top level rows
-        // Note: Supabase JS syntax for filtering on joined tables:
-        // .eq('books.category', category)
-        // AND we must ensure the join is an inner join for filtering to work on parent rows, 
-        // which `!inner` typically does.
-        // However, we are selecting `books:book_id(...)`.
-        // Let's modify the select string dynamically.
-
-        // Re-construct the query with filtering
         libraryQuery = supabase
             .from("user_library")
             .select(`
@@ -78,7 +69,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
             .eq("user_id", user.id)
             .eq("books.category", searchParams.category)
             .order("updated_at", { ascending: false })
-            .limit(50);
+            .limit(500);
     }
 
     // Get user's authored books
@@ -99,7 +90,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
     `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(500);
 
     if (searchParams?.category && searchParams.category !== "all") {
         authoredQuery = authoredQuery.eq("category", searchParams.category);
