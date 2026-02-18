@@ -29,6 +29,13 @@ function normalizeTitleAuthor(input: { title: string; author?: string | null }):
   // Strip extension if caller passed a filename.
   title = title.replace(/\.(pdf|epub|txt)$/i, "").trim();
 
+  // Strip common PDF download-site prefixes/suffixes
+  title = title.replace(/^[_\s]*OceanofPDF\.com[_\s]*/i, "");
+  title = title.replace(/[_\s]*OceanofPDF\.com[_\s]*$/i, "");
+  title = title.replace(/^[_\s]*(?:www\.)?z-lib\.org[_\s]*/i, "");
+  title = title.replace(/^[_\s]*(?:www\.)?libgen\.\w+[_\s]*/i, "");
+  title = title.replace(/^[_\s]*(?:www\.)?pdfdrive\.com[_\s]*/i, "");
+
   // Strip common suffixes like "— Summary"
   title = title.replace(/\s*(?:—|–|-)\s*summary\s*$/i, "").trim();
   title = title.replace(/\s*\bsummary\s*$/i, "").trim();
@@ -124,6 +131,25 @@ export async function POST(request: NextRequest) {
       if (typeof raw === "string") {
         (summary as Record<string, unknown>).raw_text = stripCardBlurbBlock(raw);
       }
+    }
+
+    // Deduplicate: if a book with the same title+author+user already exists, return it
+    let dupQuery = admin
+      .from("books")
+      .select("id")
+      .eq("user_id", ownerUserId)
+      .ilike("title", normalized.title);
+
+    if (normalized.author) {
+      dupQuery = dupQuery.ilike("author", normalized.author);
+    } else {
+      dupQuery = dupQuery.is("author", null);
+    }
+
+    const { data: existing } = await dupQuery.limit(1).maybeSingle();
+    if (existing) {
+      console.log(`Duplicate detected: "${normalized.title}" already exists as ${existing.id}`);
+      return NextResponse.json({ bookId: existing.id, duplicate: true }, { status: 200 });
     }
 
     const { data, error } = await admin
