@@ -43,8 +43,9 @@ export const handler = async (event: any) => {
       return { statusCode: 404, body: JSON.stringify({ error: "Book not found" }) };
     }
 
-    // Kick off generation (this function is deployed as a background function on Netlify).
-    await maybeGenerateAndSaveCover({
+    console.log(`[cover-bg] bookId=${bookId} title="${book.title}" author="${book.author}" force=${force} existingCover=${!!book.cover_url}`);
+
+    const result = await maybeGenerateAndSaveCover({
       bookId: book.id,
       userId: book.user_id,
       title: book.title,
@@ -56,9 +57,11 @@ export const handler = async (event: any) => {
       feedback: feedback,
     });
 
+    console.log(`[cover-bg] bookId=${bookId} result: skipped=${result.skipped} skipReason=${result.skipReason || "n/a"} coverUrl=${result.coverUrl || "none"}`);
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true }),
+      body: JSON.stringify({ success: true, ...result }),
     };
   } catch (err) {
     console.error(err);
