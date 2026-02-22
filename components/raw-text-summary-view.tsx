@@ -11,6 +11,13 @@ import {
     SheetTitle,
 } from "@/components/ui/sheet";
 import { List, Scroll, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+    loadReadingPosition,
+    saveReadingPosition,
+    useScrollPositionTracker,
+    useRestoreScrollPercent,
+    useSaveOnExit,
+} from "@/lib/use-reading-position";
 
 type TocItem = { id: string; label: string; level: 1 | 2 | 3; offset: number };
 
@@ -35,14 +42,20 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
     const { highlights, refreshHighlights } = useHighlights(bookId);
     const textContainerRef = useRef<HTMLDivElement | null>(null);
     const [isTocOpen, setIsTocOpen] = useState(false);
+
+    const savedPosition = typeof window !== "undefined" ? loadReadingPosition(bookId) : null;
+
     const [viewMode, setViewMode] = useState<"scroll" | "paginated">(() => {
         if (typeof window !== "undefined") {
+            if (savedPosition?.viewMode === "scroll" || savedPosition?.viewMode === "paginated") {
+                return savedPosition.viewMode as "scroll" | "paginated";
+            }
             const saved = localStorage.getItem("rawSummaryViewMode");
             return saved === "paginated" ? "paginated" : "scroll";
         }
         return "scroll";
     });
-    const [currentPage, setCurrentPage] = useState(0);
+    const [currentPage, setCurrentPage] = useState(() => savedPosition?.page ?? 0);
 
     const displayContent = useMemo(() => {
         return content.replace(/\[CARD_BLURB\][\s\S]*?\[\/CARD_BLURB\]\s*/i, "").trim();
@@ -231,6 +244,35 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         }
     }, [currentPage, pages.length]);
 
+    // Save position when page changes in paginated mode
+    useEffect(() => {
+        if (viewMode === "paginated") {
+            saveReadingPosition(bookId, { page: currentPage, viewMode: "paginated" });
+        }
+    }, [bookId, currentPage, viewMode]);
+
+    // Track scroll percent in scroll mode
+    const scrollPercentRef = useRef(savedPosition?.scrollPercent ?? 0);
+    const handleScrollPercent = useCallback((percent: number) => {
+        scrollPercentRef.current = percent;
+        saveReadingPosition(bookId, { scrollPercent: percent, viewMode: "scroll" });
+    }, [bookId]);
+
+    useScrollPositionTracker(viewMode === "scroll", handleScrollPercent);
+
+    // Restore scroll position for scroll mode
+    useRestoreScrollPercent(
+        viewMode === "scroll" && savedPosition?.viewMode === "scroll",
+        savedPosition?.scrollPercent,
+    );
+
+    // Save on exit (tab close, navigate away, app switch)
+    useSaveOnExit(bookId, () => ({
+        page: viewMode === "paginated" ? currentPage : undefined,
+        scrollPercent: viewMode === "scroll" ? scrollPercentRef.current : undefined,
+        viewMode,
+    }));
+
     const scrollToOffset = (charOffset: number) => {
         const root = textContainerRef.current;
         if (!root) return;
@@ -303,8 +345,11 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         if (mode === "paginated") {
             setCurrentPage(0);
             window.scrollTo({ top: 0, behavior: "smooth" });
+            saveReadingPosition(bookId, { page: 0, viewMode: "paginated" });
+        } else {
+            saveReadingPosition(bookId, { scrollPercent: 0, viewMode: "scroll" });
         }
-    }, []);
+    }, [bookId]);
 
     const handlePrevPage = () => {
         if (currentPage > 0) {

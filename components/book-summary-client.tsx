@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,13 @@ import { RawTextSummaryView } from "@/components/raw-text-summary-view";
 import { AudioPlayer } from "@/components/audio-player";
 import { SpeechSynthesisPlayer } from "@/components/speech-synthesis-player";
 import { toast } from "sonner";
+import {
+  loadReadingPosition,
+  saveReadingPosition,
+  useScrollPositionTracker,
+  useRestoreScrollPercent,
+  useSaveOnExit,
+} from "@/lib/use-reading-position";
 
 type BookSummaryClientProps = {
   book: SupabaseSummary;
@@ -53,8 +60,23 @@ export function BookSummaryClient({ book, canEdit = false }: BookSummaryClientPr
 
 function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<SummarySectionKey>("quick_summary");
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+
+  // Restore saved reading position (only if no URL params override it)
+  const savedPosition = typeof window !== "undefined" ? loadReadingPosition(book.id) : null;
+  const hasUrlNav = searchParams.has("section") || searchParams.has("highlightId");
+
+  const [activeTab, setActiveTab] = useState<SummarySectionKey>(() => {
+    if (hasUrlNav) return "quick_summary";
+    const s = savedPosition?.section;
+    if (s && ["quick_summary", "key_ideas", "chapters", "actionable_insights", "quotes"].includes(s)) {
+      return s as SummarySectionKey;
+    }
+    return "quick_summary";
+  });
+  const [currentItemIndex, setCurrentItemIndex] = useState(() => {
+    if (hasUrlNav) return 0;
+    return savedPosition?.itemIndex ?? 0;
+  });
   const [isContentsOpen, setIsContentsOpen] = useState(false);
   const [, setAudioMap] = useState<Record<string, string>>(
     (book.audio_urls ?? {}) as Record<string, string>,
@@ -73,13 +95,48 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isContinuousScroll, setIsContinuousScroll] = useState(() => {
-    // Load preference from localStorage
     if (typeof window !== 'undefined') {
+      if (savedPosition?.viewMode) {
+        return savedPosition.viewMode === "continuous";
+      }
       const saved = localStorage.getItem('bookSummaryViewMode');
       return saved === 'continuous';
     }
     return false;
   });
+
+  // Track scroll percent for continuous scroll mode
+  const scrollPercentRef = useRef(savedPosition?.scrollPercent ?? 0);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const currentItemIndexRef = useRef(currentItemIndex);
+  currentItemIndexRef.current = currentItemIndex;
+
+  const handleScrollPercent = useCallback((percent: number) => {
+    scrollPercentRef.current = percent;
+    saveReadingPosition(book.id, {
+      section: activeTabRef.current,
+      itemIndex: currentItemIndexRef.current,
+      scrollPercent: percent,
+      viewMode: "continuous",
+    });
+  }, [book.id]);
+
+  useScrollPositionTracker(isContinuousScroll, handleScrollPercent);
+
+  // Restore scroll position for continuous scroll mode
+  useRestoreScrollPercent(
+    isContinuousScroll && !hasUrlNav && (savedPosition?.viewMode === "continuous"),
+    savedPosition?.scrollPercent,
+  );
+
+  // Save reading position on exit (tab close, navigate away, app switch)
+  useSaveOnExit(book.id, () => ({
+    section: activeTab,
+    itemIndex: currentItemIndex,
+    scrollPercent: isContinuousScroll ? scrollPercentRef.current : undefined,
+    viewMode: isContinuousScroll ? "continuous" : "paginated",
+  }));
 
   // Handle URL parameters for navigation from highlights
   useEffect(() => {
@@ -234,15 +291,24 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
 
   const handleSectionChange = (section: SummarySectionKey) => {
     setActiveTab(section);
-    const newSectionItems = getSectionItems(section);
-    const safeIndex = newSectionItems.length > 0 ? 0 : 0;
+    const safeIndex = 0;
     setCurrentItemIndex(safeIndex);
+    saveReadingPosition(book.id, {
+      section,
+      itemIndex: safeIndex,
+      viewMode: isContinuousScroll ? "continuous" : "paginated",
+    });
   };
 
   const handleItemChange = (index: number) => {
     const currentSectionItems = getSectionItems(activeTab);
     const safeIndex = Math.max(0, Math.min(index, currentSectionItems.length - 1));
     setCurrentItemIndex(safeIndex);
+    saveReadingPosition(book.id, {
+      section: activeTab,
+      itemIndex: safeIndex,
+      viewMode: isContinuousScroll ? "continuous" : "paginated",
+    });
   };
 
   // Items per page for pagination
@@ -349,12 +415,27 @@ function StructuredBookSummaryClient({ book, canEdit }: BookSummaryClientProps) 
     }
   };
 
+  // Save position whenever activeTab or currentItemIndex changes (covers prev/next)
+  useEffect(() => {
+    if (!isContinuousScroll) {
+      saveReadingPosition(book.id, {
+        section: activeTab,
+        itemIndex: currentItemIndex,
+        viewMode: "paginated",
+      });
+    }
+  }, [book.id, activeTab, currentItemIndex, isContinuousScroll]);
+
   const handleViewModeToggle = (continuous: boolean) => {
     setIsContinuousScroll(continuous);
-    // Save preference to localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('bookSummaryViewMode', continuous ? 'continuous' : 'paginated');
     }
+    saveReadingPosition(book.id, {
+      section: activeTab,
+      itemIndex: currentItemIndex,
+      viewMode: continuous ? "continuous" : "paginated",
+    });
   };
 
   return (
