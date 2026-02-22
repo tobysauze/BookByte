@@ -13,7 +13,8 @@ import {
 import { List, Scroll, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import {
     loadReadingPosition,
-    saveReadingPosition,
+    debouncedSaveToDb,
+    useDbReadingPosition,
     useScrollPositionTracker,
     useRestoreScrollPercent,
     useSaveOnExit,
@@ -247,7 +248,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
     // Save position when page changes in paginated mode
     useEffect(() => {
         if (viewMode === "paginated") {
-            saveReadingPosition(bookId, { page: currentPage, viewMode: "paginated" });
+            debouncedSaveToDb(bookId, { page: currentPage, viewMode: "paginated" });
         }
     }, [bookId, currentPage, viewMode]);
 
@@ -255,7 +256,7 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
     const scrollPercentRef = useRef(savedPosition?.scrollPercent ?? 0);
     const handleScrollPercent = useCallback((percent: number) => {
         scrollPercentRef.current = percent;
-        saveReadingPosition(bookId, { scrollPercent: percent, viewMode: "scroll" });
+        debouncedSaveToDb(bookId, { scrollPercent: percent, viewMode: "scroll" });
     }, [bookId]);
 
     useScrollPositionTracker(viewMode === "scroll", handleScrollPercent);
@@ -272,6 +273,19 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         scrollPercent: viewMode === "scroll" ? scrollPercentRef.current : undefined,
         viewMode,
     }));
+
+    // Cross-device sync: if DB has a newer position, apply it
+    useDbReadingPosition(
+        bookId,
+        useCallback((pos) => {
+            if (pos.viewMode === "paginated" && typeof pos.page === "number") {
+                setViewMode("paginated");
+                setCurrentPage(pos.page);
+            } else if (pos.viewMode === "scroll") {
+                setViewMode("scroll");
+            }
+        }, []),
+    );
 
     const scrollToOffset = (charOffset: number) => {
         const root = textContainerRef.current;
@@ -345,9 +359,9 @@ export function RawTextSummaryView({ bookId, content }: { bookId: string; conten
         if (mode === "paginated") {
             setCurrentPage(0);
             window.scrollTo({ top: 0, behavior: "smooth" });
-            saveReadingPosition(bookId, { page: 0, viewMode: "paginated" });
+            debouncedSaveToDb(bookId, { page: 0, viewMode: "paginated" });
         } else {
-            saveReadingPosition(bookId, { scrollPercent: 0, viewMode: "scroll" });
+            debouncedSaveToDb(bookId, { scrollPercent: 0, viewMode: "scroll" });
         }
     }, [bookId]);
 
