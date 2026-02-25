@@ -12,7 +12,7 @@ import { getSessionUser } from "@/lib/auth";
 import { getUserRole, canEditBook, canDeleteBook } from "@/lib/user-roles";
 
 type BookPageParams = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 export default async function BookDetailPage({ params }: BookPageParams) {
