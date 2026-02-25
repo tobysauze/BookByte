@@ -232,6 +232,38 @@ export function BookCard({
         ? `${Math.ceil(rawText.split(/\s+/).filter((word) => word.length > 0).length / 250)} min read`
         : null;
 
+  const [optimisticFavorited, setOptimisticFavorited] = useState(isFavorited);
+  const [isFavoriting, setIsFavoriting] = useState(false);
+
+  useEffect(() => {
+    setOptimisticFavorited(isFavorited);
+  }, [isFavorited]);
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isFavoriting) return;
+
+    const wasFavorited = optimisticFavorited;
+    setOptimisticFavorited(!wasFavorited);
+    setIsFavoriting(true);
+
+    try {
+      const res = await fetch(`/api/user-favorites/${id}`, {
+        method: wasFavorited ? "DELETE" : "POST",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to update favorite");
+      }
+      toast.success(wasFavorited ? "Removed from favorites" : "Added to favorites");
+    } catch {
+      setOptimisticFavorited(wasFavorited);
+      toast.error("Failed to update favorite");
+    } finally {
+      setIsFavoriting(false);
+    }
+  };
+
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [fallbackText, setFallbackText] = useState<string | null>(null);
@@ -344,14 +376,28 @@ export function BookCard({
         </Button>
       </div>
 
-      {/* Bookmark icon */}
+      {/* Bookmark / favorite icon */}
       <div className="absolute right-4 top-4 z-10">
         <Button
+          type="button"
           variant="ghost"
           size="sm"
-          className="h-8 w-8 rounded-full bg-white/80 p-0 shadow-sm hover:bg-white"
+          className={`h-8 w-8 rounded-full p-0 shadow-sm transition-colors ${
+            optimisticFavorited
+              ? "bg-amber-100 hover:bg-amber-200"
+              : "bg-white/80 hover:bg-white"
+          }`}
+          onClick={handleToggleFavorite}
+          disabled={isFavoriting}
+          title={optimisticFavorited ? "Remove from favorites" : "Add to favorites"}
         >
-          <Bookmark className="h-4 w-4 text-gray-600" />
+          <Bookmark
+            className={`h-4 w-4 transition-colors ${
+              optimisticFavorited
+                ? "fill-amber-500 text-amber-500"
+                : "text-gray-600"
+            }`}
+          />
         </Button>
       </div>
 

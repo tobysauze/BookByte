@@ -50,15 +50,18 @@ export default async function DiscoverPage(props: { searchParams: Promise<{ quer
 
   const publicBooks = (books ?? []) as SupabaseSummary[];
 
-  // Check which books are saved to user's library (for regular users)
   let savedBookIds: string[] = [];
-  if (user && userRole === "regular") {
-    const { data: savedBooks } = await supabase
-      .from("user_library")
-      .select("book_id")
-      .eq("user_id", user.id);
+  let favoritedBookIds: string[] = [];
+  if (user) {
+    const [savedRes, favoritedRes] = await Promise.all([
+      userRole === "regular"
+        ? supabase.from("user_library").select("book_id").eq("user_id", user.id)
+        : Promise.resolve({ data: null }),
+      supabase.from("user_favorites").select("book_id").eq("user_id", user.id),
+    ]);
 
-    savedBookIds = (savedBooks ?? []).map(item => item.book_id);
+    savedBookIds = (savedRes.data ?? []).map(item => item.book_id);
+    favoritedBookIds = (favoritedRes.data ?? []).map(item => item.book_id);
   }
 
   return (
@@ -83,7 +86,8 @@ export default async function DiscoverPage(props: { searchParams: Promise<{ quer
         <BookGrid
           books={publicBooks.map(book => ({
             ...book,
-            isSavedToLibrary: savedBookIds.includes(book.id)
+            isSavedToLibrary: savedBookIds.includes(book.id),
+            isFavorited: favoritedBookIds.includes(book.id),
           }))}
           userRole={userRole}
           showDeleteButtons={userRole === "editor"}
