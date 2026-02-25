@@ -1,19 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-function getRequiredEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value;
-}
-
-const SUPABASE_URL = getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL");
-const SUPABASE_ANON_KEY = getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-
 function buildCookieHeader(existing: Array<{ name: string; value: string }>) {
-  // Request Cookie header only includes name=value pairs (no options).
   return existing.map((c) => `${c.name}=${c.value}`).join("; ");
 }
 
@@ -24,8 +12,12 @@ function buildCookieHeader(existing: Array<{ name: string; value: string }>) {
  * get logged out (especially in production where server components rely on cookies).
  */
 export async function proxy(request: NextRequest) {
-  // We must forward refreshed cookies to Server Components in THIS request.
-  // Doing so requires overriding the downstream request headers.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.next();
+  }
+
   const requestHeaders = new Headers(request.headers);
   const response = NextResponse.next({
     request: {
@@ -36,7 +28,7 @@ export async function proxy(request: NextRequest) {
   const cookieMap = new Map<string, string>();
   request.cookies.getAll().forEach((c) => cookieMap.set(c.name, c.value));
 
-  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll().map((cookie) => ({
