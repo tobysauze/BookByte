@@ -13,33 +13,19 @@ export async function POST(
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
-      console.error("Error getting user:", userError);
       const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
       return result;
     }
 
-    if (!user) {
-      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
-      return result;
-    }
-
-    // Ensure the book exists and is public
     const { data: book, error: bookError } = await supabase
       .from("books")
-      .select("is_public")
+      .select("id, user_id, is_public")
       .eq("id", bookId)
       .single();
 
     if (bookError || !book) {
       const result = NextResponse.json({ error: "Book not found" }, { status: 404 });
-      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
-      return result;
-    }
-
-    if (!book.is_public) {
-      const result = NextResponse.json({ error: "Cannot favorite a private book." }, { status: 403 });
       authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
       return result;
     }
@@ -91,13 +77,6 @@ export async function DELETE(
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
-      console.error("Error getting user:", userError);
-      const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
-      return result;
-    }
-
-    if (!user) {
       const result = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       authResponse.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
       return result;
