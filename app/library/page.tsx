@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
 import { getUserRole } from "@/lib/user-roles";
+import { getMatchingCategories } from "@/lib/genres";
 import { BookGrid } from "@/components/book-grid";
 import { SearchInput } from "@/components/search-input";
 import { CategoryFilter } from "@/components/category-filter";
@@ -32,6 +33,10 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
         created_at
     `;
 
+    const categoryFilter = searchParams?.category && searchParams.category !== "all"
+        ? await getMatchingCategories(searchParams.category)
+        : null;
+
     let libraryQuery = supabase
         .from("user_library")
         .select(`
@@ -45,7 +50,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
         .order("updated_at", { ascending: false })
         .limit(500);
 
-    if (searchParams?.category && searchParams.category !== "all") {
+    if (categoryFilter) {
         libraryQuery = supabase
             .from("user_library")
             .select(`
@@ -56,7 +61,7 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
                 updated_at
             `)
             .eq("user_id", user.id)
-            .eq("books.category", searchParams.category)
+            .in("books.category", categoryFilter)
             .order("updated_at", { ascending: false })
             .limit(500);
     }
@@ -69,8 +74,8 @@ export default async function LibraryPage(props: { searchParams: Promise<{ query
         .order("created_at", { ascending: false })
         .limit(500);
 
-    if (searchParams?.category && searchParams.category !== "all") {
-        authoredQuery = authoredQuery.eq("category", searchParams.category);
+    if (categoryFilter) {
+        authoredQuery = authoredQuery.in("category", categoryFilter);
     }
 
     const [libraryRes, authoredRes] = await Promise.all([libraryQuery, authoredQuery]);

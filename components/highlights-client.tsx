@@ -29,12 +29,34 @@ function getHighlightColorClasses(color: string = "yellow") {
 type ViewMode = "card" | "list";
 
 export function HighlightsClient() {
-  const { highlights, isLoading, error, refreshHighlights } = useHighlights();
+  const { highlights, isLoading, error, refreshHighlights, removeHighlight } = useHighlights();
   const { addHighlightToFolder } = useFolders();
   const [viewMode, setViewMode] = useState<ViewMode>("card");
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [selectedSubGenre, setSelectedSubGenre] = useState<string | null>(null);
+  const [genreTree, setGenreTree] = useState<{ id: string; name: string; parent_id: string | null; children: { id: string; name: string; parent_id: string | null }[] }[]>([]);
   const [draggedHighlightId, setDraggedHighlightId] = useState<string | null>(null);
   const [isDraggingOverFolder, setIsDraggingOverFolder] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/genres")
+      .then((r) => r.json())
+      .then((data) => {
+        const genres = (data.genres || []) as { id: string; name: string; parent_id: string | null }[];
+        const parents = genres
+          .filter((g) => !g.parent_id)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setGenreTree(
+          parents.map((p) => ({
+            ...p,
+            children: genres
+              .filter((g) => g.parent_id === p.id)
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          })),
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   // Create a reusable empty drag image element
   useEffect(() => {
@@ -118,7 +140,7 @@ export function HighlightsClient() {
       }
 
       toast.success("Highlight deleted");
-      refreshHighlights();
+      removeHighlight(highlightId);
     } catch (error) {
       console.error("Error deleting highlight:", error);
       toast.error(error instanceof Error ? error.message : "Failed to delete highlight");
@@ -178,18 +200,38 @@ export function HighlightsClient() {
     window.location.href = url;
   };
 
-  // Extract unique genres from all highlights
-  const genres = Array.from(
-    new Set(
-      highlights
-        .map((h) => h.books?.category)
-        .filter((c): c is string => Boolean(c)),
-    ),
-  ).sort();
+  // Build set of categories present in highlights
+  const highlightCategories = new Set(
+    highlights
+      .map((h) => h.books?.category)
+      .filter((c): c is string => Boolean(c)),
+  );
 
-  // Filter highlights by selected genre
-  const filteredHighlights = selectedGenre
-    ? highlights.filter((h) => h.books?.category === selectedGenre)
+  // Only show parent genres that have at least one highlight (directly or via sub-genre)
+  const relevantParentGenres = genreTree.filter((parent) => {
+    if (highlightCategories.has(parent.name)) return true;
+    return parent.children.some((c) => highlightCategories.has(c.name));
+  });
+
+  // Sub-genres of the selected parent that have highlights
+  const relevantSubGenres = selectedGenre
+    ? (genreTree.find((g) => g.name === selectedGenre)?.children ?? []).filter(
+        (c) => highlightCategories.has(c.name),
+      )
+    : [];
+
+  // Build the set of matching category names for the current filter
+  const getMatchingNames = (): Set<string> | null => {
+    if (!selectedGenre) return null;
+    if (selectedSubGenre) return new Set([selectedSubGenre]);
+    const parent = genreTree.find((g) => g.name === selectedGenre);
+    if (!parent) return new Set([selectedGenre]);
+    return new Set([parent.name, ...parent.children.map((c) => c.name)]);
+  };
+
+  const matchingNames = getMatchingNames();
+  const filteredHighlights = matchingNames
+    ? highlights.filter((h) => h.books?.category && matchingNames.has(h.books.category))
     : highlights;
 
   // Group filtered highlights by book
@@ -258,7 +300,7 @@ export function HighlightsClient() {
               <p className="text-[rgb(var(--muted-foreground))] mt-2">
                 {filteredHighlights.length} highlight{filteredHighlights.length !== 1 ? "s" : ""} across {Object.keys(highlightsByBook).length} book{Object.keys(highlightsByBook).length !== 1 ? "s" : ""}
                 {selectedGenre && (
-                  <span> in <span className="font-medium text-[rgb(var(--foreground))]">{selectedGenre}</span></span>
+                  <span> in <span className="font-medium text-[rgb(var(--foreground))]">{selectedSubGenre || selectedGenre}</span></span>
                 )}
               </p>
             </div>
@@ -284,28 +326,54 @@ export function HighlightsClient() {
             </div>
           </div>
 
-          {genres.length > 1 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <Tag className="h-4 w-4 text-[rgb(var(--muted-foreground))] flex-shrink-0" />
-              <Button
-                variant={selectedGenre === null ? "default" : "outline"}
-                size="sm"
-                className="h-7 rounded-full px-3 text-xs"
-                onClick={() => setSelectedGenre(null)}
-              >
-                All
-              </Button>
-              {genres.map((genre) => (
+          {relevantParentGenres.length > 1 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Tag className="h-4 w-4 text-[rgb(var(--muted-foreground))] flex-shrink-0" />
                 <Button
-                  key={genre}
-                  variant={selectedGenre === genre ? "default" : "outline"}
+                  variant={selectedGenre === null ? "default" : "outline"}
                   size="sm"
                   className="h-7 rounded-full px-3 text-xs"
-                  onClick={() => setSelectedGenre(genre)}
+                  onClick={() => { setSelectedGenre(null); setSelectedSubGenre(null); }}
                 >
-                  {genre}
+                  All
                 </Button>
-              ))}
+                {relevantParentGenres.map((genre) => (
+                  <Button
+                    key={genre.id}
+                    variant={selectedGenre === genre.name ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 rounded-full px-3 text-xs"
+                    onClick={() => { setSelectedGenre(genre.name); setSelectedSubGenre(null); }}
+                  >
+                    {genre.name}
+                  </Button>
+                ))}
+              </div>
+              {selectedGenre && relevantSubGenres.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap pl-6">
+                  <span className="text-xs text-[rgb(var(--muted-foreground))]">↳</span>
+                  <Button
+                    variant={selectedSubGenre === null ? "secondary" : "outline"}
+                    size="sm"
+                    className="h-6 rounded-full px-2.5 text-xs"
+                    onClick={() => setSelectedSubGenre(null)}
+                  >
+                    All {selectedGenre}
+                  </Button>
+                  {relevantSubGenres.map((sub) => (
+                    <Button
+                      key={sub.id}
+                      variant={selectedSubGenre === sub.name ? "secondary" : "outline"}
+                      size="sm"
+                      className="h-6 rounded-full px-2.5 text-xs"
+                      onClick={() => setSelectedSubGenre(sub.name)}
+                    >
+                      {sub.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

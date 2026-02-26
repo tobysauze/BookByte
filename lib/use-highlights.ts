@@ -77,6 +77,10 @@ export function useHighlights(bookId?: string) {
     }
   };
 
-  return { highlights, isLoading, error, refreshHighlights };
+  const removeHighlight = (id: string) => {
+    setHighlights((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  return { highlights, isLoading, error, refreshHighlights, removeHighlight };
 }
 

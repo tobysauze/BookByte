@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase";
 import type { SupabaseSummary } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
 import { getUserRole } from "@/lib/user-roles";
+import { getMatchingCategories } from "@/lib/genres";
 import { SearchInput } from "@/components/search-input";
 import { CategoryFilter } from "@/components/category-filter";
 
@@ -37,9 +38,10 @@ export default async function DiscoverPage(props: { searchParams: Promise<{ quer
     queryBuilder = queryBuilder.or(`title.ilike.%${query}%,author.ilike.%${query}%`);
   }
 
-  // Apply category filter if present
+  // Apply category filter — parent genres expand to include sub-genres
   if (searchParams?.category && searchParams.category !== "all") {
-    queryBuilder = queryBuilder.eq("category", searchParams.category);
+    const categories = await getMatchingCategories(searchParams.category);
+    queryBuilder = queryBuilder.in("category", categories);
   }
 
   const { data: books, error } = await queryBuilder;
