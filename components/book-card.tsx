@@ -31,7 +31,7 @@ import type { SupabaseSummary } from "@/lib/supabase";
 import { AudioPlayer } from "@/components/audio-player";
 import { SpeechSynthesisPlayer } from "@/components/speech-synthesis-player";
 import { toast } from "sonner";
-import { CATEGORIES } from "@/lib/categories";
+import { Fragment } from "react";
 
 type BookCardProps = {
   book: SupabaseSummary;
@@ -168,8 +168,30 @@ export function BookCard({
   const [isEditingCategory, setIsEditingCategory] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [optimisticCategory, setOptimisticCategory] = useState<string | null>(null);
+  const [genreTree, setGenreTree] = useState<{ id: string; name: string; parent_id: string | null; children: { id: string; name: string }[] }[]>([]);
   const [isSummaryRevealed, setIsSummaryRevealed] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    if (!isEditingCategory || genreTree.length > 0) return;
+    fetch("/api/genres")
+      .then((r) => r.json())
+      .then((data) => {
+        const genres = (data.genres || []) as { id: string; name: string; parent_id: string | null }[];
+        const parents = genres
+          .filter((g) => !g.parent_id)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setGenreTree(
+          parents.map((p) => ({
+            ...p,
+            children: genres
+              .filter((g) => g.parent_id === p.id)
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          })),
+        );
+      })
+      .catch(() => {});
+  }, [isEditingCategory, genreTree.length]);
 
   const currentCategory = optimisticCategory || getCategory();
 
@@ -436,10 +458,18 @@ export function BookCard({
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent onClick={(e) => e.stopPropagation()}>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
+                  {genreTree.map((parent) => (
+                    <Fragment key={parent.id}>
+                      <SelectItem value={parent.name} className="font-medium">
+                        {parent.name}
+                      </SelectItem>
+                      {parent.children.map((child) => (
+                        <SelectItem key={child.id} value={child.name} className="pl-6">
+                          <span className="text-[rgb(var(--muted-foreground))] mr-1">↳</span>
+                          {child.name}
+                        </SelectItem>
+                      ))}
+                    </Fragment>
                   ))}
                 </SelectContent>
               </Select>
