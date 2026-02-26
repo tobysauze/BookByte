@@ -218,11 +218,11 @@ export default async function LandingPage() {
       {/* ── Final CTA ── */}
       <section className="overflow-hidden rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-10 text-center sm:p-16">
         <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Start summarising books today
+          Start reading smarter today
         </h2>
         <p className="mx-auto mt-4 max-w-md text-sm text-[rgb(var(--muted-foreground))] sm:text-base">
-          Join BookByte and build a personal knowledge library from the best
-          non-fiction books.
+          Join thousands of readers getting the key ideas from the best
+          non-fiction books — in minutes, not hours.
         </p>
         <div className="mt-8">
           <Link
