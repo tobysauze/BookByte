@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Trash2, BookOpen, LayoutGrid, List } from "lucide-react";
+import { Trash2, BookOpen, LayoutGrid, List, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useHighlights } from "@/lib/use-highlights";
 import { useFolders } from "@/lib/use-folders";
@@ -32,6 +32,7 @@ export function HighlightsClient() {
   const { highlights, isLoading, error, refreshHighlights } = useHighlights();
   const { addHighlightToFolder } = useFolders();
   const [viewMode, setViewMode] = useState<ViewMode>("card");
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [draggedHighlightId, setDraggedHighlightId] = useState<string | null>(null);
   const [isDraggingOverFolder, setIsDraggingOverFolder] = useState(false);
 
@@ -177,8 +178,22 @@ export function HighlightsClient() {
     window.location.href = url;
   };
 
-  // Group highlights by book
-  const highlightsByBook = highlights.reduce((acc, highlight) => {
+  // Extract unique genres from all highlights
+  const genres = Array.from(
+    new Set(
+      highlights
+        .map((h) => h.books?.category)
+        .filter((c): c is string => Boolean(c)),
+    ),
+  ).sort();
+
+  // Filter highlights by selected genre
+  const filteredHighlights = selectedGenre
+    ? highlights.filter((h) => h.books?.category === selectedGenre)
+    : highlights;
+
+  // Group filtered highlights by book
+  const highlightsByBook = filteredHighlights.reduce((acc, highlight) => {
     const bookId = highlight.book_id;
     if (!acc[bookId]) {
       acc[bookId] = {
@@ -187,13 +202,14 @@ export function HighlightsClient() {
           title: "Unknown Book",
           author: null,
           cover_url: null,
+          category: null,
         },
         highlights: [],
       };
     }
     acc[bookId].highlights.push(highlight);
     return acc;
-  }, {} as Record<string, { book: { id: string; title: string; author: string | null; cover_url: string | null }; highlights: typeof highlights }>);
+  }, {} as Record<string, { book: { id: string; title: string; author: string | null; cover_url: string | null; category: string | null }; highlights: typeof filteredHighlights }>);
 
   if (isLoading) {
     return (
@@ -240,7 +256,10 @@ export function HighlightsClient() {
             <div>
               <h1 className="text-3xl font-bold">My Highlights</h1>
               <p className="text-[rgb(var(--muted-foreground))] mt-2">
-                {highlights.length} highlight{highlights.length !== 1 ? "s" : ""} across {Object.keys(highlightsByBook).length} book{Object.keys(highlightsByBook).length !== 1 ? "s" : ""}
+                {filteredHighlights.length} highlight{filteredHighlights.length !== 1 ? "s" : ""} across {Object.keys(highlightsByBook).length} book{Object.keys(highlightsByBook).length !== 1 ? "s" : ""}
+                {selectedGenre && (
+                  <span> in <span className="font-medium text-[rgb(var(--foreground))]">{selectedGenre}</span></span>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -264,6 +283,31 @@ export function HighlightsClient() {
               </Button>
             </div>
           </div>
+
+          {genres.length > 1 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Tag className="h-4 w-4 text-[rgb(var(--muted-foreground))] flex-shrink-0" />
+              <Button
+                variant={selectedGenre === null ? "default" : "outline"}
+                size="sm"
+                className="h-7 rounded-full px-3 text-xs"
+                onClick={() => setSelectedGenre(null)}
+              >
+                All
+              </Button>
+              {genres.map((genre) => (
+                <Button
+                  key={genre}
+                  variant={selectedGenre === genre ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 rounded-full px-3 text-xs"
+                  onClick={() => setSelectedGenre(genre)}
+                >
+                  {genre}
+                </Button>
+              ))}
+            </div>
+          )}
 
       {viewMode === "card" ? (
         <div className="space-y-8">
@@ -384,7 +428,7 @@ export function HighlightsClient() {
         </div>
       ) : (
         <div className="space-y-0">
-          {highlights.map((highlight) => {
+          {filteredHighlights.map((highlight) => {
             const sectionNames: Record<string, string> = {
               quick_summary: "Quick Summary",
               key_ideas: "Key Ideas",
@@ -398,6 +442,7 @@ export function HighlightsClient() {
               title: "Unknown Book",
               author: null,
               cover_url: null,
+              category: null,
             };
 
             return (

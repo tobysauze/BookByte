@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("user_highlights")
-      .select("*, books(id, title, author, cover_url)")
+      .select("*, books(id, title, author, cover_url, category)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 

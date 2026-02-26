@@ -18,6 +18,7 @@ export type Highlight = {
     title: string;
     author: string | null;
     cover_url: string | null;
+    category: string | null;
   };
 };
 
