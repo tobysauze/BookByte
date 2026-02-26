@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { BookSummaryClient } from "@/components/book-summary-client";
@@ -6,6 +7,7 @@ import { BookAnalysis } from "@/components/book-analysis";
 import { EnhanceSummaryButton } from "@/components/enhance-summary-button";
 import { SummaryRating } from "@/components/summary-rating";
 import { AverageRatingBadge } from "@/components/average-rating-badge";
+import { BookJsonLd } from "@/components/book-json-ld";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import type { SupabaseSummary } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth";
@@ -15,26 +17,73 @@ type BookPageParams = {
   params: Promise<{ id: string }>;
 };
 
+async function getBook(id: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("books")
+    .select(
+      "id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, user_id, created_at, local_file_path, analysis_results, last_analyzed_at, word_count, description, category",
+    )
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return data as SupabaseSummary;
+}
+
+function getBookDescription(book: SupabaseSummary): string {
+  if (book.description) return book.description.slice(0, 200);
+  const s = book.summary as Record<string, unknown> | null;
+  if (s && typeof s === "object") {
+    if (typeof s.short_summary === "string") return s.short_summary;
+    if (typeof s.quick_summary === "string") return (s.quick_summary as string).slice(0, 200);
+  }
+  const byLine = book.author ? ` by ${book.author}` : "";
+  return `AI-generated summary of "${book.title}"${byLine}. Key ideas, chapter breakdowns, and actionable insights.`;
+}
+
+export async function generateMetadata({ params }: BookPageParams): Promise<Metadata> {
+  const { id } = await params;
+  const book = await getBook(id);
+  if (!book) return { title: "Book not found" };
+
+  const description = getBookDescription(book);
+  const byLine = book.author ? ` by ${book.author}` : "";
+  const pageTitle = `${book.title}${byLine} — Summary`;
+
+  return {
+    title: pageTitle,
+    description,
+    openGraph: {
+      title: pageTitle,
+      description,
+      type: "article",
+      url: `/books/${id}`,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: pageTitle,
+      description,
+    },
+    alternates: {
+      canonical: `/books/${id}`,
+    },
+  };
+}
+
 export default async function BookDetailPage({ params }: BookPageParams) {
   const { id } = await params;
+  const book = await getBook(id);
+
+  if (!book) {
+    notFound();
+  }
+
   const supabase = await createSupabaseServerClient();
   const user = await getSessionUser();
   const userRole = await getUserRole();
 
-  const { data: book, error } = await supabase
-    .from("books")
-    .select(
-      "id, title, author, cover_url, file_url, summary, audio_urls, progress_percent, is_public, user_id, created_at, local_file_path, analysis_results, last_analyzed_at",
-    )
-    .eq("id", id)
-    .single();
+  const typedBook = book;
 
-  if (error || !book) {
-    console.error("Supabase error loading book", error);
-    notFound();
-  }
-
-  const typedBook = book as SupabaseSummary;
   const isOwner = user?.id === typedBook.user_id;
   const canEdit = await canEditBook(typedBook.user_id, typedBook.is_public);
   const canDelete = await canDeleteBook(typedBook.user_id);
@@ -75,6 +124,7 @@ export default async function BookDetailPage({ params }: BookPageParams) {
 
   return (
     <div className="space-y-10">
+      <BookJsonLd book={typedBook} />
       <BookHeroClient 
         book={typedBook} 
         isOwner={isOwner}
