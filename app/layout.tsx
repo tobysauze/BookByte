@@ -34,11 +34,11 @@ export const metadata: Metadata = {
     template: "%s | BookByte",
   },
   description:
-    "BookByte turns your books and PDFs into structured summaries, actionable insights, and audio recaps powered by AI.",
+    "AI-powered summaries of the best non-fiction books. Key ideas, chapter breakdowns, actionable insights, and audio narration.",
   openGraph: {
     title: "BookByte — AI-Powered Book Summaries",
     description:
-      "Upload books or PDFs and get quick summaries, key ideas, and audio recaps with BookByte.",
+      "AI-powered summaries of the best non-fiction books. Key ideas, chapter breakdowns, actionable insights, and audio narration.",
     url: "https://bookbyte.app",
     siteName: "BookByte",
     locale: "en_US",
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "BookByte — AI-Powered Book Summaries",
     description:
-      "Generate AI summaries, key ideas, chapters, insights, and audio for your books with BookByte.",
+      "AI-powered summaries of the best non-fiction books. Key ideas, chapter breakdowns, and audio narration.",
   },
 };
 

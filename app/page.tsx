@@ -17,7 +17,7 @@ import type { SupabaseSummary } from "@/lib/supabase";
 
 export default async function LandingPage() {
   const user = await getSessionUser();
-  if (user) redirect("/library");
+  if (user) redirect("/discover");
 
   const supabase = await createSupabaseServerClient();
   const { data: featuredBooks } = await supabase
@@ -46,9 +46,8 @@ export default async function LandingPage() {
         </h1>
 
         <p className="mt-6 max-w-xl text-base leading-relaxed text-[rgb(var(--muted-foreground))] sm:text-lg">
-          Upload any non-fiction book or PDF and get a structured summary with
-          key ideas, chapter breakdowns, actionable insights, and audio
-          narration — in minutes.
+          Get structured summaries of the best non-fiction books — with key
+          ideas, chapter breakdowns, actionable insights, and audio narration.
         </p>
 
         <div className="mt-10 flex flex-col gap-4 sm:flex-row">
@@ -82,25 +81,25 @@ export default async function LandingPage() {
             How it works
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            From book to summary in 3 steps
+            Three simple steps
           </h2>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-3">
           <StepCard
             step="1"
-            title="Upload your book"
-            description="Drop a PDF, EPUB, or paste text. We support books of any length."
+            title="Pick a book"
+            description="Browse our growing library of non-fiction book summaries across dozens of categories."
           />
           <StepCard
             step="2"
-            title="AI generates your summary"
-            description="Our AI reads the entire book and creates a structured 5-part summary."
+            title="Read the summary"
+            description="Each book is broken into a quick overview, key ideas, chapter breakdowns, and actionable insights."
           />
           <StepCard
             step="3"
-            title="Read, listen, or share"
-            description="Access your summary anytime. Listen to audio narration or share with others."
+            title="Listen or save"
+            description="Listen to audio narration on the go, save favourites, and highlight the passages that matter."
           />
         </div>
       </section>
@@ -222,8 +221,8 @@ export default async function LandingPage() {
           Start summarising books today
         </h2>
         <p className="mx-auto mt-4 max-w-md text-sm text-[rgb(var(--muted-foreground))] sm:text-base">
-          Join BookByte and turn your reading list into a knowledge library you
-          can actually use.
+          Join BookByte and build a personal knowledge library from the best
+          non-fiction books.
         </p>
         <div className="mt-8">
           <Link

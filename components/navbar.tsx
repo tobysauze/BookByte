@@ -13,7 +13,6 @@ import {
   CheckCircle,
   Highlighter,
 
-  Plus,
   Menu,
   User as UserIcon,
   FileText,
@@ -174,20 +173,11 @@ export function Navbar({ initialUser }: NavbarProps) {
                   )}
                 </div>
                 {userRole === "editor" && (
-                  <>
-                    <Button asChild variant="default" size="sm">
-                      <Link href="/create-book">
-                        <Plus className="mr-2 h-4 w-4" />
-                        <span className="hidden lg:inline">Create Book</span>
-                        <span className="lg:hidden">Create</span>
-                      </Link>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm" title="Admin Files">
-                      <Link href="/admin/files">
-                        <FileText className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </>
+                  <Button asChild variant="ghost" size="sm" title="Admin Files">
+                    <Link href="/admin/files">
+                      <FileText className="h-4 w-4" />
+                    </Link>
+                  </Button>
                 )}
                 <Link
                   href={`/profile`}
@@ -275,20 +265,12 @@ export function Navbar({ initialUser }: NavbarProps) {
                           </Link>
                         </Button>
                         {userRole === "editor" && (
-                          <>
-                            <Button asChild variant="default" className="w-full justify-start" size="sm">
-                              <Link href="/create-book">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Create Book
-                              </Link>
-                            </Button>
-                            <Button asChild variant="ghost" className="w-full justify-start" size="sm">
-                              <Link href="/admin/files">
-                                <FileText className="mr-2 h-4 w-4" />
-                                Admin Files
-                              </Link>
-                            </Button>
-                          </>
+                          <Button asChild variant="ghost" className="w-full justify-start" size="sm">
+                            <Link href="/admin/files">
+                              <FileText className="mr-2 h-4 w-4" />
+                              Admin Files
+                            </Link>
+                          </Button>
                         )}
                         <Button
                           variant="ghost"
