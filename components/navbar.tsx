@@ -95,7 +95,7 @@ export function Navbar({ initialUser }: NavbarProps) {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[rgb(var(--border))] bg-[rgb(var(--background))]/85 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-3 sm:gap-4 lg:gap-6 px-4 py-4 sm:px-6 lg:px-10">
+      <div className="flex w-full items-center gap-3 sm:gap-4 lg:gap-5 px-3 py-4 sm:px-4 lg:px-6">
         <div className="flex items-center gap-2 sm:gap-3 text-lg font-semibold flex-shrink-0">
           <Link href="/" className="flex items-center gap-2">
             <Image
@@ -110,7 +110,7 @@ export function Navbar({ initialUser }: NavbarProps) {
         </div>
 
         {/* Desktop Navigation */}
-        <nav className="hidden items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-1 text-sm font-medium text-[rgb(var(--muted-foreground))] md:flex flex-1 justify-center max-w-2xl mx-auto">
+        <nav className="hidden items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-1 text-sm font-medium text-[rgb(var(--muted-foreground))] md:flex justify-center">
           {filteredLinks.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
@@ -163,10 +163,10 @@ export function Navbar({ initialUser }: NavbarProps) {
             </Button>
           )}
 
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
             {user ? (
               <>
-                <div className="flex items-center gap-2 mr-2">
+                <div className="flex items-center gap-1.5 mr-1">
                   {userRole === "editor" ? (
                     <Badge variant="default" className="h-6 px-2 text-xs">Admin</Badge>
                   ) : (
@@ -189,7 +189,7 @@ export function Navbar({ initialUser }: NavbarProps) {
                 )}
                 <Link
                   href={`/profile`}
-                  className="hidden text-sm text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))] lg:block truncate max-w-[120px]"
+                  className="hidden text-sm text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))] xl:block truncate max-w-[100px]"
                 >
                   {user.email}
                 </Link>
