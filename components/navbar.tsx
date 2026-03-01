@@ -12,7 +12,7 @@ import {
   Heart,
   CheckCircle,
   Highlighter,
-
+  MessageSquare,
   Menu,
   User as UserIcon,
   FileText,
@@ -49,6 +49,7 @@ const navLinks: NavbarLink[] = [
   { href: "/favorites", label: "Favorites", icon: Heart, requiresAuth: true },
   { href: "/highlights", label: "Highlights", icon: Highlighter, requiresAuth: true },
   { href: "/notes", label: "Notes", icon: FileText, requiresAuth: true },
+  { href: "/chat", label: "AI Chat", icon: MessageSquare, requiresAuth: true },
 ];
 
 type NavbarProps = {
