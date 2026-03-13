@@ -261,8 +261,26 @@ function pollPdfJobs() {
     }
 
     if (status === "error") {
-      Logger.log(`Job ${entry.jobId} errored: ${res.json.error || "Unknown error"}`);
-      // Keep tracked so you can inspect/retry later.
+      const errorMsg = res.json.error || "Unknown error";
+      Logger.log(`Job ${entry.jobId} errored: ${errorMsg}`);
+      Logger.log(`File: ${entry.fileName} (${fileId})`);
+
+      // Rename the PDF with an [ERROR] prefix so it's easy to spot
+      try {
+        const pdfFile = withRetries_(() => DriveApp.getFileById(fileId), "DriveApp.getFileById");
+        const currentName = pdfFile.getName();
+        if (!currentName.startsWith("[ERROR]")) {
+          withRetries_(() => pdfFile.setName(`[ERROR] ${currentName}`), "pdfFile.setName");
+          Logger.log(`Renamed PDF to: [ERROR] ${currentName}`);
+        }
+      } catch (renameErr) {
+        Logger.log(`Could not rename errored PDF: ${stringifyError_(renameErr)}`);
+      }
+
+      // Clear from tracking so the pipeline is unblocked
+      delete jobsState[fileId];
+      setJobsState_(jobsState);
+      Logger.log(`Cleared errored job from tracking. Pipeline unblocked.`);
       return;
     }
 
