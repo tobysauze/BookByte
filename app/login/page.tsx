@@ -9,7 +9,7 @@ export default function LoginPage() {
         </p>
         <h1 className="text-3xl font-semibold">Sign in to BookByte <span className="text-xs font-normal text-muted-foreground">(v1.1)</span></h1>
         <p className="text-sm text-[rgb(var(--muted-foreground))]">
-          Use your email to log in or create a new account.
+          Sign in with Google or use your email.
         </p>
       </header>
       <AuthForm />
