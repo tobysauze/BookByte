@@ -14,6 +14,7 @@ export const createSupabaseBrowserClient = () => {
   // across navigations and deployments. SSR cookie sync is handled separately.
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
+      flowType: "pkce",
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
