@@ -1,46 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { Loader2 } from "lucide-react";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
-    const handleCallback = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-
-      if (!code) {
-        router.replace(
-          `/auth/auth-code-error?error=${encodeURIComponent("No code provided")}`,
-        );
-        return;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        router.replace("/library");
+        router.refresh();
       }
+    });
 
-      const { error: exchangeError } =
-        await supabase.auth.exchangeCodeForSession(code);
+    const timeout = setTimeout(() => {
+      router.replace(
+        `/auth/auth-code-error?error=${encodeURIComponent("Sign-in timed out. Please try again.")}`,
+      );
+    }, 10000);
 
-      if (exchangeError) {
-        router.replace(
-          `/auth/auth-code-error?error=${encodeURIComponent(exchangeError.message)}`,
-        );
-        return;
-      }
-
-      router.replace("/library");
-      router.refresh();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
     };
-
-    handleCallback();
   }, [router]);
-
-  if (error) return null;
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center">
