@@ -88,7 +88,7 @@ export function Navbar({ initialUser }: NavbarProps) {
     void sync();
     const interval = window.setInterval(sync, 30_000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [pathname]);
 
   const filteredLinks = navLinks.filter((link) =>
     link.requiresAuth ? Boolean(user) : true,

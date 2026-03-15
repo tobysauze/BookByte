@@ -38,8 +38,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      router.replace("/library");
-      router.refresh();
+      window.location.href = "/library";
     };
 
     const {
