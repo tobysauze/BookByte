@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase";
 import { summarySchema, flexibleSummarySchema, rawTextSummarySchema } from "@/lib/schemas";
 import { calculateBookMetadata } from "@/lib/metadata-utils";
+import { classifyBookGenre } from "@/lib/classify-genre";
 import { maybeGenerateAndSaveCover } from "@/lib/cover-generator";
 
 export const runtime = "nodejs";
@@ -64,6 +65,20 @@ export async function POST(request: NextRequest) {
 
     const isEditor = userProfile?.is_editor ?? false;
     
+    const bookMeta = calculateBookMetadata(parsedSummary.data);
+    const summaryText =
+      (parsedSummary.data && typeof parsedSummary.data === "object" && "raw_text" in parsedSummary.data
+        ? String((parsedSummary.data as Record<string, unknown>).raw_text)
+        : null) ??
+      (parsedSummary.data && typeof parsedSummary.data === "object" && "quick_summary" in parsedSummary.data
+        ? String((parsedSummary.data as Record<string, unknown>).quick_summary)
+        : "");
+    bookMeta.category = await classifyBookGenre(
+      metadata.title,
+      metadata.author ?? null,
+      summaryText,
+    );
+
     const insertPayload = {
       user_id: user.id,
       title: metadata.title,
@@ -75,6 +90,7 @@ export async function POST(request: NextRequest) {
       progress_percent: 0,
       is_public: false,
       is_editor_created: isEditor,
+      ...bookMeta,
     };
 
     const { data, error } = await supabase

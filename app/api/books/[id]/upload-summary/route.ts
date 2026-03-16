@@ -6,6 +6,7 @@ import { canEditBook } from "@/lib/user-roles";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { calculateBookMetadata } from "@/lib/metadata-utils";
+import { classifyBookGenre } from "@/lib/classify-genre";
 import { maybeGenerateAndSaveCover } from "@/lib/cover-generator";
 
 export const runtime = "nodejs";
@@ -244,6 +245,11 @@ export async function POST(
       });
 
       const metadata = calculateBookMetadata(raw);
+      metadata.category = await classifyBookGenre(
+        book.title || "Untitled",
+        book.author,
+        summaryText,
+      );
       const { error: updateError } = await supabase
         .from("books")
         .update({
@@ -462,6 +468,11 @@ Return ONLY valid JSON matching this exact structure (no markdown formatting, no
 
       // Update the book with the parsed summary
       const metadata = calculateBookMetadata(parsedSummary);
+      metadata.category = await classifyBookGenre(
+        book.title || "Untitled",
+        book.author,
+        summaryText,
+      );
       const { error: updateError } = await supabase
         .from("books")
         .update({

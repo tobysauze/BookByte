@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { calculateBookMetadata } from "@/lib/metadata-utils";
+import { classifyBookGenre } from "@/lib/classify-genre";
 import { rawTextSummarySchema, summarySchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
@@ -124,6 +125,20 @@ export async function POST(request: NextRequest) {
 
     const metadata = calculateBookMetadata(summary);
     const normalized = normalizeTitleAuthor({ title: body.title, author: body.author ?? null });
+
+    const summaryText =
+      (summary && typeof summary === "object" && "raw_text" in summary
+        ? String((summary as Record<string, unknown>).raw_text)
+        : null) ??
+      (summary && typeof summary === "object" && "quick_summary" in summary
+        ? String((summary as Record<string, unknown>).quick_summary)
+        : "");
+
+    metadata.category = await classifyBookGenre(
+      normalized.title,
+      normalized.author,
+      summaryText,
+    );
 
     // Keep the card blurb for metadata extraction, but store raw_text without the tags.
     if (summary && typeof summary === "object" && "raw_text" in summary) {

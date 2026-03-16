@@ -6,6 +6,8 @@ import { getUserRole } from "@/lib/user-roles";
 import { canEditBook } from "@/lib/user-roles";
 import { extractTextFromFile } from "@/lib/pdf";
 import { generateStructuredSummary } from "@/lib/openrouter";
+import { classifyBookGenre } from "@/lib/classify-genre";
+import { calculateBookMetadata } from "@/lib/metadata-utils";
 
 // Type guard for structured summaries
 function isStructuredSummary(summary: SummaryPayload): summary is z.infer<typeof summarySchema> {
@@ -337,11 +339,24 @@ export async function POST(
       book.author || undefined
     );
 
+    // Calculate metadata and classify genre
+    const chapterMeta = calculateBookMetadata(combinedSummary);
+    const combinedText =
+      "quick_summary" in combinedSummary
+        ? String((combinedSummary as Record<string, unknown>).quick_summary)
+        : "";
+    chapterMeta.category = await classifyBookGenre(
+      book.title || "Untitled",
+      book.author,
+      combinedText,
+    );
+
     // Update the book with the combined summary
     const { error: updateError } = await supabase
       .from("books")
       .update({
         summary: combinedSummary,
+        ...chapterMeta,
       })
       .eq("id", id);
 
