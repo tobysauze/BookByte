@@ -89,10 +89,9 @@ export function RegenerateCoverButton({
           variant="outline"
           size="sm"
           className="w-full"
-          disabled={!currentCoverUrl}
         >
           <RefreshCw className="mr-2 h-4 w-4" />
-          Regenerate Cover
+          {currentCoverUrl ? "Regenerate Cover" : "Generate Cover"}
         </Button>
       </DialogTrigger>
       <DialogContent>
