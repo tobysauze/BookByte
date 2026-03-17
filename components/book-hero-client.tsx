@@ -13,7 +13,7 @@ import { DownloadPdfButton } from "@/components/download-pdf-button";
 import { UploadSummaryButton } from "@/components/upload-summary-button";
 import { UploadChaptersButton } from "@/components/upload-chapters-button";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -120,6 +120,7 @@ export function BookHeroClient({
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(initialIsSavedToLibrary);
   const [isRead, setIsRead] = useState(initialIsRead);
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited);
+  const [coverUrl, setCoverUrl] = useState<string | null>(book.cover_url);
   const router = useRouter();
 
   const handleDelete = async () => {
@@ -143,6 +144,19 @@ export function BookHeroClient({
     }
   };
 
+  const handleDeleteCover = async () => {
+    try {
+      const response = await fetch(`/api/books/${book.id}/cover`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete cover");
+      setCoverUrl(null);
+      toast.success("Cover removed");
+    } catch (err) {
+      toast.error("Failed to remove cover");
+    }
+  };
+
   const handleRemoveFromLibrary = () => {
     setIsSavedToLibrary(false);
     setIsRead(false);
@@ -160,9 +174,9 @@ export function BookHeroClient({
   return (
     <section className="flex flex-col gap-6 rounded-4xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 md:flex-row md:items-center md:gap-10">
       <div className="relative h-48 w-36 flex-shrink-0 overflow-hidden rounded-3xl bg-gradient-to-br from-[rgb(var(--accent))] to-purple-500">
-        {book.cover_url ? (
+        {coverUrl ? (
           <Image
-            src={book.cover_url}
+            src={coverUrl}
             alt={book.title}
             fill
             sizes="(min-width: 768px) 144px, 50vw"
@@ -222,12 +236,23 @@ export function BookHeroClient({
                 <VisibilityToggle bookId={book.id} initialIsPublic={book.is_public} />
                 <CoverUpload
                   bookId={book.id}
-                  currentCoverUrl={book.cover_url}
+                  currentCoverUrl={coverUrl}
                 />
                 <RegenerateCoverButton
                   bookId={book.id}
-                  currentCoverUrl={book.cover_url}
+                  currentCoverUrl={coverUrl}
                 />
+                {coverUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                    onClick={handleDeleteCover}
+                  >
+                    <ImageOff className="mr-2 h-4 w-4" />
+                    Remove Cover
+                  </Button>
+                )}
               </>
             ) : null}
           </div>
