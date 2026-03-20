@@ -18,6 +18,8 @@ import "dotenv/config";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
+import { buildCoverImagePrompt } from "../lib/cover-generator";
+
 type BookRow = {
   id: string;
   user_id: string;
@@ -44,26 +46,18 @@ function sleep(ms: number) {
 
 function buildPrompt(book: BookRow) {
   const title = (book.title || "").trim();
-  const author = (book.author || "").trim();
-  const category = (book.category || "").trim();
-  const desc = (book.description || "").trim();
+  const author = (book.author || "").trim() || "Unknown";
+  const category = (book.category || "").trim() || null;
+  const desc = (book.description || "").trim() || null;
 
-  // We’re intentionally NOT asking it to replicate any existing cover. We only match “vibe” loosely.
-  return [
-    "Design an original, simple cartoony book cover in a flat vector / icon style.",
-    "Portrait 2:3 book cover composition, centered layout, clean margins, strong readability.",
-    "Use a limited color palette (2–4 colors). Smooth shapes, minimal detail, no photorealism.",
-    "Place a single bold icon/illustration in the center that hints at the theme.",
-    "Typography: big, bold title near top; smaller author name near bottom. Keep text perfectly legible.",
-    "No logos, no publisher marks, no trademarks.",
-    "Do NOT copy or imitate any existing book cover art. Avoid recognizable compositions or exact typography.",
-    category ? `Genre/category vibe: ${category}.` : "",
-    desc ? `Story/summary (for mood + icon idea): ${desc}` : "",
-    `Title: ${title}`,
-    author ? `Author: ${author}` : "Author: (unknown)",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return buildCoverImagePrompt({
+    title,
+    author,
+    category,
+    description: desc,
+    coverStyleHint: null,
+    feedback: null,
+  });
 }
 
 async function main() {

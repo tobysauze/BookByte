@@ -18,7 +18,7 @@ function isGeneratedCoverUrl(url: string) {
   return url.includes("generated-cover-") || url.includes("/generated-cover-");
 }
 
-function buildPrompt(args: {
+export function buildCoverImagePrompt(args: {
   title: string;
   author: string;
   category?: string | null;
@@ -33,11 +33,15 @@ function buildPrompt(args: {
     "Portrait 2:3 book cover composition (1024x1536), centered layout, clean margins, strong readability.",
     "Use a limited color palette (2–4 colors). Smooth shapes, minimal detail, no photorealism.",
     "Place a single bold icon/illustration in the center that hints at the theme.",
-    "Typography: big, bold title near top; smaller author name near bottom. Keep text perfectly legible.",
+    "Typography: big, bold title near top; smaller author name near bottom.",
+    "CRITICAL — readable type: title and author must have strong contrast against the surface they sit on (large lightness difference, clearly different hue from the background). Never use low-contrast text (e.g. pale yellow on cream, light gray on white, mid-blue on similar blue, or any color that blends into the background).",
+    "Put title and author on a dedicated solid or nearly-solid band, panel, or clear negative space so letters do not sit on top of busy illustration detail or gradients that match the type color.",
+    "If the scene is dark, use light type on a slightly lighter or saturated panel; if the scene is light, use dark type on a slightly darker or saturated panel—never the same tonal value as the area behind the words.",
+    "Optional: a very subtle crisp outline or soft shadow on the letters only if it improves separation; keep letterforms bold and clean, not fuzzy.",
     "No logos, no publisher marks, no trademarks.",
     "Do NOT copy or imitate any existing book cover art exactly. Avoid recognizable compositions or exact typography.",
     coverStyleHint
-      ? `Reference cover (for vibe only, do not copy):\n${coverStyleHint}`
+      ? `Reference cover (for illustration mood only—do not copy layout or colors literally). Typography must stay high-contrast and readable even if the reference looks subtle:\n${coverStyleHint}`
       : "",
     category ? `Genre/category vibe: ${category}.` : "",
     description ? `Summary (for mood + icon idea): ${description}` : "",
@@ -121,7 +125,7 @@ async function describeExistingCover(openai: OpenAI, imageUrl: string): Promise<
           content: [
             {
               type: "text",
-              text: "Describe this book cover so an illustrator can create a new cartoony flat-vector cover with a similar vibe. Include: main icon/scene, dominant colors, background style, typography placement.",
+              text: "Describe this book cover so an illustrator can create a new cartoony flat-vector cover with a similar vibe. Include: main icon/scene, dominant colors, background style, typography placement. Note whether the reference type is hard to read; if so, suggest a clearer high-contrast treatment for title/author (e.g. solid panel + contrasting type) without copying the original.",
             },
             { type: "image_url", image_url: { url: imageUrl } },
           ],
@@ -203,7 +207,7 @@ export async function maybeGenerateAndSaveCover({
     ? await describeExistingCover(openai, referenceCoverUrl).catch(() => null)
     : null;
 
-  const prompt = buildPrompt({
+  const prompt = buildCoverImagePrompt({
     title: title.trim(),
     author: resolvedAuthor,
     category: category ?? null,
