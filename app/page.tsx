@@ -234,11 +234,6 @@ export default async function LandingPage() {
           </Link>
         </div>
       </section>
-
-      {/* ── Footer ── */}
-      <footer className="border-t border-[rgb(var(--border))] pb-8 pt-8 text-center text-xs text-[rgb(var(--muted-foreground))]">
-        <p>&copy; {new Date().getFullYear()} BookByte. All rights reserved.</p>
-      </footer>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { Navbar } from "@/components/navbar";
+import { SiteFooter } from "@/components/site-footer";
 import { ClientThemeProvider } from "@/components/theme-provider";
 import { getSessionUser } from "@/lib/auth";
 import { TextPreferencesProvider } from "@/lib/text-preferences-context";
@@ -69,6 +70,9 @@ export default async function RootLayout({
             <Navbar initialUser={user} />
             <main className="px-3 pb-16 pt-20 sm:px-4 sm:pt-24 lg:px-10">
               <div className="mx-auto w-full max-w-6xl">{children}</div>
+              <div className="mx-auto mt-16 w-full max-w-6xl">
+                <SiteFooter />
+              </div>
             </main>
             <Toaster />
           </TextPreferencesProvider>
